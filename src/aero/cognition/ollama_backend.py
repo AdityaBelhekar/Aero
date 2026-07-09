@@ -33,10 +33,17 @@ class OllamaCognition(CognitionService):
         *,
         host: str = DEFAULT_HOST,
         timeout: float = 120.0,
+        think: bool = False,
     ):
         self.model_name = model_name
         self.host = host.rstrip("/")
         self.timeout = timeout
+        # Gemma 4 E4B is a reasoning model: left on, it spends the whole token
+        # budget on a hidden chain-of-thought and returns empty content. Aero
+        # wants fast, in-character replies, so thinking is OFF by default
+        # (latency budgets, PRD Section 24). Flip per-call where deep reasoning
+        # genuinely helps (e.g. the impulse gate).
+        self.think = think
 
     # -- HTTP plumbing -----------------------------------------------------
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -65,6 +72,7 @@ class OllamaCognition(CognitionService):
             "model": self.model_name,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": False,
+            "think": self.think,  # top-level toggle for reasoning models
             "options": options,
         }
         if fmt is not None:
@@ -77,11 +85,13 @@ class OllamaCognition(CognitionService):
         ns = 1e9
         total = raw.get("total_duration", 0) / ns
         load = raw.get("load_duration", 0) / ns
+        eval_s = raw.get("eval_duration", 0) / ns  # generation-only window
         return GenerationStats(
             prompt_tokens=raw.get("prompt_eval_count", 0),
             completion_tokens=raw.get("eval_count", 0),
             total_seconds=total or 1e-9,
             load_seconds=load,
+            eval_seconds=eval_s,
         )
 
     # -- CognitionService --------------------------------------------------

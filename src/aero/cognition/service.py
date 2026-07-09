@@ -28,10 +28,16 @@ class GenerationStats:
     completion_tokens: int
     total_seconds: float
     load_seconds: float = 0.0
+    #: Pure token-generation time (excludes model load AND prompt processing).
+    #: This is the honest sustained decode rate; total_seconds mixes in prompt
+    #: eval, which distorts throughput on short replies.
+    eval_seconds: float = 0.0
 
     @property
     def tokens_per_second(self) -> float:
-        # Throughput on the *generated* tokens, excluding model load time.
+        # Prefer the isolated generation window when the backend reports it.
+        if self.eval_seconds > 0:
+            return self.completion_tokens / self.eval_seconds
         gen_seconds = max(self.total_seconds - self.load_seconds, 1e-9)
         return self.completion_tokens / gen_seconds
 

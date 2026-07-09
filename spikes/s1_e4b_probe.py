@@ -40,13 +40,19 @@ AERO_SYSTEM = (
 
 def probe_throughput(llm: OllamaCognition) -> float:
     print("\n[1/3] THROUGHPUT")
+    # Ask for a longer answer so the decode-rate reading is stable (short
+    # replies make tok/s noisy even when isolating the generation window).
     res = llm.chat(
         [
-            ChatMessage("system", AERO_SYSTEM),
-            ChatMessage("user", "explain in 3 short lines why you run locally on my laptop"),
+            ChatMessage("system", "You are a helpful assistant."),
+            ChatMessage(
+                "user",
+                "Write ~150 words about why running an AI companion locally on a "
+                "laptop is good for privacy. Plain prose.",
+            ),
         ],
         temperature=0.6,
-        max_tokens=200,
+        max_tokens=250,
     )
     s = res.stats
     print(textwrap.indent(res.text.strip(), "    "))
