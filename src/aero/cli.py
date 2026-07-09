@@ -138,8 +138,74 @@ def cmd_smoke(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_consolidate(cfg: Config, _args) -> int:
+    """Run the idle-time consolidation pass over unprocessed raw events."""
+    from aero.cognition.embeddings import OllamaEmbedder
+    from aero.cognition.ollama_backend import OllamaCognition
+    from aero.memory.consolidation import Consolidator
+    from aero.memory.store import MemoryStore
+
+    llm, emb = OllamaCognition(), OllamaEmbedder()
+    if not llm.health_check() or not emb.health_check():
+        print("Ollama models not available (need gemma4:e4b + embeddinggemma).")
+        return 1
+    with _open(cfg, create=False) as v:
+        store = MemoryStore(v, actor="consolidation")
+        res = Consolidator(store, llm, emb).run()
+    print(f"consolidated: processed={res.processed} memories={res.memories_created} "
+          f"edges={res.edges_created} skipped={res.skipped}")
+    return 0
+
+
+def cmd_chat(cfg: Config, _args) -> int:
+    """Interactive memory-in-the-loop chat with Aero (Milestone 2)."""
+    from datetime import datetime
+
+    from aero.agent import AeroAgent
+    from aero.cognition.embeddings import OllamaEmbedder
+    from aero.cognition.ollama_backend import OllamaCognition
+    from aero.memory.store import MemoryStore
+    from aero.working_set import WorldState
+
+    llm, emb = OllamaCognition(), OllamaEmbedder()
+    if not llm.health_check():
+        print("gemma4:e4b not available. Start Ollama / pull the model.")
+        return 1
+    if not emb.health_check():
+        print("embeddinggemma not available. Run: ollama pull embeddinggemma")
+        return 1
+
+    cfg.ensure_dirs()
+    with _open(cfg) as v:
+        store = MemoryStore(v, actor="user")
+        world = WorldState(time_str=datetime.now().strftime("%a %H:%M"))
+        agent = AeroAgent(store, llm, emb, world=world)
+        n_mem = store.vault.conn.execute(
+            "SELECT COUNT(*) AS n FROM memories WHERE summary NOT LIKE 'concept:%'"
+        ).fetchone()["n"]
+        print(f"Aero ({llm.model_name}) — {n_mem} memories in the vault.")
+        print("Type your message. Ctrl-C or 'exit' to leave. "
+              "Run `aero consolidate` afterwards to turn this chat into memory.\n")
+        try:
+            while True:
+                try:
+                    user = input("you> ").strip()
+                except EOFError:
+                    break
+                if user.lower() in {"exit", "quit"}:
+                    break
+                if not user:
+                    continue
+                reply = agent.respond(user)
+                print(f"aero> {reply}\n")
+        except KeyboardInterrupt:
+            print()
+    print("(chat logged. run `aero consolidate` to consolidate it into memory.)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="aero", description="Aero local companion (Milestone 1)")
+    p = argparse.ArgumentParser(prog="aero", description="Aero local companion")
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("init", help="create/upgrade the vault")
     sub.add_parser("status", help="show vault info")
@@ -147,6 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("restore", help="restore newest (or named) snapshot")
     r.add_argument("snapshot", nargs="?", help="path to a .aero-backup file")
     sub.add_parser("smoke", help="run the Milestone-1 acceptance smoke test")
+    sub.add_parser("chat", help="interactive memory-in-the-loop chat (Milestone 2)")
+    sub.add_parser("consolidate", help="turn logged raw events into durable memory")
     return p
 
 
@@ -156,6 +224,8 @@ _HANDLERS = {
     "backup": cmd_backup,
     "restore": cmd_restore,
     "smoke": cmd_smoke,
+    "chat": cmd_chat,
+    "consolidate": cmd_consolidate,
 }
 
 
