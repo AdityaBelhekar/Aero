@@ -1,0 +1,37 @@
+[project]
+name = "aero"
+version = "0.0.1"
+description = "Persistent local-first social-intelligence AI companion (see Aero-PRD-v0.2.md)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Aditya Belhekar" }]
+dependencies = [
+    # Milestone 1 has zero hard third-party deps — vault runs on the stdlib
+    # sqlite3 so the foundation is always runnable. Optional extras below.
+]
+
+[project.optional-dependencies]
+# Encryption at rest (AERO-VLT-001). Installed when available; the vault
+# degrades to an explicitly-marked plaintext file if it is missing.
+crypto = ["sqlcipher3-binary>=0.5.0"]
+# Later milestones (kept out of the base install so M1 stays lean).
+llm = ["llama-cpp-python>=0.3.0"]
+embed = ["sentence-transformers>=3.0.0", "sqlite-vec>=0.1.0"]
+dev = ["pytest>=8.0", "ruff>=0.6.0"]
+
+[project.scripts]
+aero = "aero.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

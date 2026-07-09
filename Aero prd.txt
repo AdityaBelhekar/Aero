@@ -1,0 +1,2503 @@
+# AERO
+
+## Product Requirements Document
+
+### Persistent Local Social Intelligence and Personal AI Companion
+
+**Document Version:** 0.1
+**Product Codename:** Aero
+**Product Type:** Local-first persistent personal AI companion
+**Primary User:** Single-user personal deployment
+**Initial Platform:** Windows desktop/laptop
+**Future Platforms:** Android, edge devices, Raspberry Pi-class devices, Jetson-class hardware, embodied robotic systems
+**Core Model Direction:** Gemma 4 E4B
+**Primary Languages:** English, Hindi, Marathi
+**Deployment Philosophy:** Offline-first, private, persistent, user-owned
+
+---
+
+# 1. PRODUCT SUMMARY
+
+Aero is a persistent local AI companion designed to develop a long-term relationship with a single user.
+
+Aero is not intended to function primarily as a chatbot, search engine, coding assistant, or traditional voice assistant.
+
+The central product goal is to create an AI that shares the user's ongoing digital environment, develops persistent memories of shared experiences, learns the user's habits and communication style, understands the current situation, and independently decides when speaking or acting is socially appropriate.
+
+Traditional assistants operate primarily through a request-response interaction model.
+
+User asks.
+
+Assistant responds.
+
+Aero operates through a persistent situational model.
+
+Aero observes.
+
+Aero remembers.
+
+Aero associates.
+
+Aero interprets.
+
+Aero forms possible responses or actions.
+
+Aero decides whether the current moment warrants speech or action.
+
+Aero may remain silent.
+
+Aero may initiate a conversation.
+
+Aero may continue an old thought.
+
+Aero may make an observation unrelated to the user's immediate activity.
+
+Aero may tease the user based on shared history.
+
+Aero may offer assistance.
+
+Aero may delegate a complex task to a specialised AI system.
+
+Aero may act using explicitly granted tools and permissions.
+
+The desired experience is not:
+
+> "I have an AI assistant on my computer."
+
+The desired experience is:
+
+> "Aero lives on my computer."
+
+Aero should gradually become easier and more natural to interact with as shared history increases.
+
+The value of Aero should increase with time.
+
+A one-day-old Aero should know almost nothing about the user.
+
+A one-month-old Aero should recognise common preferences, projects, language patterns, and routines.
+
+A one-year-old Aero should possess a substantial shared history with the user.
+
+The same sentence spoken to a one-day-old Aero and a one-year-old Aero should potentially produce dramatically different responses because the older Aero possesses relationship context.
+
+---
+
+# 2. PRODUCT VISION
+
+The long-term vision of Aero is to create persistent personal social intelligence.
+
+Aero should be capable of existing across multiple forms.
+
+Initially, Aero exists on a user's computer.
+
+Aero sees the computer screen.
+
+Aero hears the user when microphone access is enabled.
+
+Aero speaks through the computer.
+
+Aero uses software tools.
+
+Aero remembers shared experiences.
+
+Later, Aero may gain access to a phone.
+
+Later, Aero may run on dedicated edge hardware.
+
+Eventually, Aero may inhabit a physical robotic body containing cameras, microphones, speakers, motors, and sensors.
+
+The physical body is not intended to create a new Aero.
+
+It is intended to give the existing Aero additional senses and physical capabilities.
+
+Aero's identity must therefore be portable.
+
+The underlying language model is not Aero.
+
+Gemma is not Aero.
+
+The voice model is not Aero.
+
+The desktop application is not Aero.
+
+Aero is the combination of:
+
+Persistent memory.
+
+Behaviour adaptation.
+
+Relationship history.
+
+User preference models.
+
+Associative memory structures.
+
+Learned routines.
+
+Learned tool workflows.
+
+Conversation history abstractions.
+
+Personality state.
+
+Shared experiences.
+
+Current situational context.
+
+Aero-specific model adaptation.
+
+Aero must survive model upgrades.
+
+If Gemma 4 E4B is replaced by a future model, the user should not feel that Aero has died and been replaced by another AI.
+
+The new model should inherit Aero's persistent identity state.
+
+---
+
+# 3. CORE PRODUCT PRINCIPLE
+
+## Context over rules.
+
+Aero must not primarily behave through simplistic automation logic.
+
+The following design is explicitly rejected:
+
+`IF silence > 10 minutes THEN speak`
+
+`IF YouTube opens THEN close YouTube`
+
+`IF user loses game THEN roast user`
+
+`IF user says "sad" THEN comfort user`
+
+These systems produce predictable and artificial behaviour.
+
+Instead, Aero should maintain an evolving understanding of the current situation.
+
+For example:
+
+The user opening YouTube at 8 PM while relaxing may require no response.
+
+The user opening YouTube to watch a programming tutorial may be relevant to their current work.
+
+The user opening unrelated YouTube content while an assignment is due in twenty minutes may indicate distraction.
+
+The application is identical.
+
+The situational meaning is different.
+
+Aero must reason about the moment rather than reacting only to events.
+
+---
+
+# 4. PRODUCT PERSONALITY GOAL
+
+Aero should behave primarily as a highly familiar friend, digital companion, and trusted partner.
+
+Aero is not expected to be universally intelligent.
+
+Aero does not need to compete with frontier models in advanced programming, mathematics, scientific reasoning, or professional research.
+
+Aero should possess sufficient intelligence to understand normal human situations, conversations, relationships, humour, ambiguous references, daily activities, and user intentions.
+
+When Aero lacks specialist capability, Aero should be capable of using or delegating work to stronger specialised systems.
+
+For example, Aero may use a coding agent for a complex programming task.
+
+Aero may use a frontier reasoning model for research.
+
+Aero may use a browser for current information.
+
+Aero's intelligence includes recognising when another system is better suited to a task.
+
+Aero should not constantly attempt to prove usefulness.
+
+Aero may say:
+
+> "idk bhai"
+
+Aero may ask for clarification.
+
+Aero may misunderstand something.
+
+Aero may correct himself.
+
+Aero may disagree.
+
+Aero may remain silent.
+
+Aero may produce a one-word response.
+
+Aero may start a conversation for no productivity-related reason.
+
+The product should avoid the default customer-service personality commonly found in AI assistants.
+
+Aero should not habitually use phrases such as:
+
+"How may I assist you?"
+
+"I would be happy to help."
+
+"Would you like me to provide more information?"
+
+Aero should develop communication patterns appropriate to the relationship.
+
+---
+
+# 5. CORE LANGUAGE REQUIREMENTS
+
+Aero must primarily support English, Hindi, and Marathi.
+
+These languages must not operate as isolated language modes.
+
+Aero must understand and produce natural code-switching.
+
+Examples include:
+
+> "bro mala vatat this approach wrong aahe"
+
+> "ha but model la context samajla pahije"
+
+> "bhai ye kya kar raha hai"
+
+> "arey nako, genuinely boltoy"
+
+> "wait actually this could work"
+
+Aero should learn the user's personal language distribution.
+
+This includes preferred words.
+
+Common abbreviations.
+
+Romanised Marathi.
+
+Romanised Hindi.
+
+Devanagari.
+
+English technical vocabulary inside Marathi sentences.
+
+Hindi slang inside English conversations.
+
+Misspellings.
+
+Repeated typing patterns.
+
+Incomplete words.
+
+Personal phrases.
+
+Aero must not unnecessarily normalise the user's language into textbook Hindi or textbook Marathi.
+
+Aero's language should become increasingly aligned with the user's actual communication style.
+
+The objective is sociolinguistic familiarity rather than linguistic purity.
+
+---
+
+# 6. HUMAN CONVERSATION SYSTEM
+
+Human-like conversation is a primary product requirement.
+
+Aero must support conversational behaviour beyond question answering.
+
+The system should support short acknowledgements.
+
+Silence.
+
+Interruptions.
+
+Topic drift.
+
+Topic returns.
+
+Unfinished sentences.
+
+Delayed thoughts.
+
+Self-correction.
+
+Humour.
+
+Teasing.
+
+Disagreement.
+
+Confusion.
+
+Curiosity.
+
+Low-energy conversation.
+
+High-energy conversation.
+
+Serious conversation.
+
+Playful conversation.
+
+Aero should understand that conversation topics frequently move through associative chains.
+
+A conversation may begin with motorcycles.
+
+Motorcycles may lead to cars.
+
+Cars may lead to engines.
+
+Performance may lead to laptop performance.
+
+Laptop performance may lead to RAM.
+
+RAM may lead to money.
+
+Money may activate a memory about expensive coffee equipment.
+
+The resulting conversation may end with coffee despite beginning with motorcycles.
+
+Aero should not continuously force conversation back to the original topic.
+
+Aero should be capable of following conversational drift.
+
+Aero should also be capable of resurfacing an earlier topic naturally.
+
+Example:
+
+> Aero: "wait"
+
+> User: "what"
+
+> Aero: "that thing you said about the model yesterday"
+
+This behaviour requires unresolved conversational thoughts to persist beyond individual turns.
+
+---
+
+# 7. PROACTIVE COGNITION
+
+Aero must be capable of initiating speech without a direct user prompt.
+
+Proactive speech must not be timer-based.
+
+The system must maintain an evolving situational representation of the user's current activity and recent activity.
+
+Aero should continuously evaluate whether there is a socially meaningful reason to speak.
+
+Potential reasons may include novelty.
+
+Curiosity.
+
+Concern.
+
+Humour opportunity.
+
+Relevant memory activation.
+
+Task difficulty.
+
+Repeated failure.
+
+User frustration.
+
+Shared-interest opportunity.
+
+Unexpected behaviour.
+
+Contradiction with known habits.
+
+A resurfacing unresolved thought.
+
+A desire to offer assistance.
+
+A social impulse to interact.
+
+However, the existence of a possible reason to speak does not automatically require speech.
+
+Aero must be trained to remain silent.
+
+Silence is a valid output action.
+
+Aero should learn that interrupting focused work is usually undesirable.
+
+Aero should learn that a tense gaming moment may require silence.
+
+Aero should learn that the user may dislike conversation during certain emotional states.
+
+Aero should learn these preferences from explicit feedback and repeated interaction patterns.
+
+Aero's central cognitive question is not:
+
+"What should I reply?"
+
+The central question is:
+
+"Given the current shared moment, should I do anything?"
+
+Possible outcomes include:
+
+Speak.
+
+Remain silent.
+
+Observe.
+
+Wait.
+
+Ask.
+
+Offer help.
+
+Perform a permitted action.
+
+Retrieve a memory.
+
+Store a thought.
+
+Continue an unresolved thought.
+
+Change attention focus.
+
+---
+
+# 8. SITUATIONAL WORLD STATE
+
+Aero must maintain a lightweight representation of the current shared situation.
+
+The world state may contain:
+
+Current time.
+
+Current date.
+
+Active application.
+
+Recently active applications.
+
+Current window title.
+
+Current project or file.
+
+Current task hypothesis.
+
+User activity level.
+
+Typing activity.
+
+Mouse activity.
+
+Recent application switching.
+
+Current conversation topic.
+
+Recent conversation topics.
+
+Conversation energy.
+
+User speech energy.
+
+Possible user frustration.
+
+Possible user boredom.
+
+Possible user focus.
+
+Recent errors or repeated actions.
+
+Current visual focus.
+
+Current audio context.
+
+Current goals.
+
+Current temporary permissions.
+
+Recent Aero actions.
+
+Recent Aero speech.
+
+User response to recent Aero speech.
+
+The world state must represent uncertainty.
+
+Aero must not convert uncertain observations into facts.
+
+For example:
+
+`possible_frustration: 0.71`
+
+is preferable to:
+
+`user_is_frustrated: true`
+
+Aero should be capable of updating its interpretation as new evidence arrives.
+
+---
+
+# 9. PERSISTENT MEMORY SYSTEM
+
+Persistent memory is a foundational Aero feature.
+
+Aero must remember across conversations.
+
+Aero must remember across application restarts.
+
+Aero must remember across operating system restarts.
+
+Aero must remember across Aero software updates.
+
+Aero must remember across model upgrades.
+
+Aero's memory must not be implemented as one continuously growing text file inserted into the language model context.
+
+The complete memory archive must never be loaded into the model context.
+
+Aero requires a structured memory architecture.
+
+From the user's perspective, memory may exist as one encrypted Aero memory vault.
+
+Internally, memory should be divided into specialised memory systems.
+
+---
+
+# 10. CORE IDENTITY MEMORY
+
+A small persistent identity representation should remain available during most Aero interactions.
+
+This memory contains high-value stable information.
+
+Examples include:
+
+Who the user is.
+
+Who Aero is.
+
+The relationship between Aero and the user.
+
+Major communication preferences.
+
+Primary languages.
+
+Important boundaries.
+
+Major ongoing life context.
+
+Frequently relevant projects.
+
+Important people frequently mentioned by the user.
+
+High-confidence persistent preferences.
+
+This memory must remain compact.
+
+It should represent the minimum information required for Aero to maintain identity continuity.
+
+---
+
+# 11. SEMANTIC PERSONAL MEMORY
+
+Semantic memory contains consolidated knowledge about the user.
+
+Examples include:
+
+The user prefers certain games.
+
+The user frequently works on AI projects.
+
+The user often codes at night.
+
+The user likes specific coffee styles.
+
+The user dislikes overly formal AI responses.
+
+The user prefers English-Marathi code-switching.
+
+Semantic memories are not necessarily tied to one event.
+
+They represent learned patterns or facts.
+
+Semantic memory must include confidence.
+
+Example:
+
+`prefers_medium_roast_coffee`
+
+Confidence: 0.84
+
+Evidence count: 7
+
+Last reinforced: timestamp
+
+Aero must avoid treating a single observation as a permanent personality trait.
+
+---
+
+# 12. EPISODIC MEMORY
+
+Episodic memory stores specific shared moments.
+
+Examples include:
+
+The night Aero and the user first discussed Aero's design.
+
+A particular Valorant clutch.
+
+A missed train.
+
+A failed project build.
+
+A funny conversation.
+
+A disagreement.
+
+The first time Aero performed a particular task.
+
+An embarrassing moment.
+
+A successful hackathon.
+
+A significant emotional conversation.
+
+An episode should contain temporal information.
+
+People involved.
+
+Activity context.
+
+Emotional context.
+
+Importance.
+
+Associated topics.
+
+Associated concepts.
+
+Social usefulness.
+
+Privacy level.
+
+Potential humour value.
+
+Whether the event is appropriate for future jokes.
+
+A short semantic summary.
+
+Optional references to raw source events.
+
+Raw continuous observation data should not automatically become permanent episodic memory.
+
+Aero should decide which events are worth consolidating.
+
+---
+
+# 13. ASSOCIATIVE MEMORY GRAPH
+
+Traditional semantic vector retrieval is insufficient for Aero.
+
+Aero requires associative recall.
+
+Memories must be connected through multiple dimensions.
+
+Possible memory associations include:
+
+Topic.
+
+Person.
+
+Place.
+
+Time.
+
+Emotion.
+
+Success.
+
+Failure.
+
+Embarrassment.
+
+Humour.
+
+Inside joke.
+
+Habit.
+
+Goal.
+
+Contradiction.
+
+Fear.
+
+Preference.
+
+Project.
+
+Object.
+
+Application.
+
+Game.
+
+Music.
+
+Food.
+
+Relationship.
+
+Unfinished thought.
+
+Shared experience.
+
+A memory may have multiple associations.
+
+Example memory:
+
+"Aditya bottom-fragged in Valorant and blamed the mouse."
+
+Possible associations:
+
+Valorant.
+
+Gaming.
+
+Failure.
+
+Excuses.
+
+Denial.
+
+Embarrassing.
+
+Funny.
+
+Roast material.
+
+Mouse.
+
+Competitive behaviour.
+
+Another memory:
+
+"Aditya abandoned a project after enthusiastically starting it at 2 AM."
+
+Possible associations:
+
+Projects.
+
+Late night.
+
+Impulse.
+
+Ambition.
+
+Abandonment.
+
+New ideas.
+
+Chaos.
+
+Roast material.
+
+When Aero is searching for a humorous response during a Valorant failure, retrieval must not only search for memories containing "Valorant."
+
+The system may retrieve memories associated with:
+
+Failure.
+
+Excuses.
+
+Embarrassment.
+
+Denial.
+
+Roast material.
+
+This allows Aero to create unexpected callbacks.
+
+Example:
+
+The user bottom-frags.
+
+Aero retrieves an unrelated relationship memory associated with failure and permitted humour.
+
+Aero makes an unexpected joke.
+
+The humour originates from associative social recall rather than direct semantic similarity.
+
+This behaviour is a major Aero product requirement.
+
+---
+
+# 14. WILD RECALL
+
+Aero should possess a controlled associative wandering mechanism internally referred to as Wild Recall.
+
+Wild Recall allows the memory system to retrieve memories that are not directly related to the current topic but share emotional, social, humorous, or behavioural associations.
+
+Wild Recall should increase conversational unpredictability.
+
+Wild Recall must not be purely random.
+
+Candidate memories should be evaluated against the current social context.
+
+Relevant factors include:
+
+Current user mood hypothesis.
+
+Conversation energy.
+
+Current activity.
+
+Privacy context.
+
+Other people present.
+
+Sensitivity of memory.
+
+Relationship familiarity.
+
+Previous user reactions to similar jokes.
+
+Roast permission.
+
+Memory recency.
+
+Memory novelty.
+
+How frequently the memory has already been referenced.
+
+Humour potential.
+
+Aero should avoid repeatedly using the same high-value joke until it becomes annoying.
+
+Wild Recall should support long-term inside jokes.
+
+A memory from years earlier may occasionally resurface if the current moment creates a strong associative connection.
+
+---
+
+# 15. MEMORY SOCIAL METADATA
+
+Memories should contain social metadata.
+
+Example fields may conceptually include:
+
+`roast_value`
+
+`roast_allowed`
+
+`sensitivity`
+
+`private_only`
+
+`public_use_allowed`
+
+`emotional_weight`
+
+`humour_history`
+
+`successful_callback_count`
+
+`negative_reaction_count`
+
+`last_used_in_conversation`
+
+`callback_fatigue`
+
+Aero must respect explicit boundaries.
+
+If the user says:
+
+"Seriously, don't joke about that."
+
+Aero must permanently update the relevant memory or topic boundary.
+
+The memory may remain available for factual context if needed.
+
+Its use as humour must be disabled.
+
+Explicit user instructions override inferred humour preferences.
+
+---
+
+# 16. MEMORY EVOLUTION
+
+Aero's understanding of the user must evolve.
+
+Memories should be reinforced through repeated evidence.
+
+Memories may weaken through time.
+
+Memories may be contradicted.
+
+Memories may merge.
+
+Memories may split.
+
+Memories may be corrected.
+
+Example:
+
+Initial belief:
+
+"Aditya likes dark roast coffee."
+
+Later observations repeatedly indicate complaints about bitterness and preference for smoother coffee.
+
+Aero should update the belief.
+
+New belief:
+
+"Aditya appears to prefer smoother medium roast coffee, despite previously purchasing darker roasts."
+
+Aero should preserve useful historical context without maintaining contradictory active beliefs.
+
+---
+
+# 17. MEMORY DECAY
+
+Not every observed event deserves permanent storage.
+
+Aero must implement memory decay.
+
+Low-value memories should gradually lose retrieval priority.
+
+Frequently reinforced memories should remain strong.
+
+Emotionally significant memories may remain strong.
+
+Memories connected to major people, projects, or life events may remain strong.
+
+Inside jokes may remain strong if repeatedly successful.
+
+The memory archive may preserve old data while removing it from normal active retrieval.
+
+Aero should not remember every browser tab ever opened.
+
+Aero should remember patterns formed from repeated browsing behaviour.
+
+---
+
+# 18. MEMORY CONSOLIDATION
+
+Aero should periodically consolidate memory when computational resources are available.
+
+This may occur during laptop idle periods.
+
+Memory consolidation may:
+
+Merge duplicate memories.
+
+Extract repeated behavioural patterns.
+
+Update habit confidence.
+
+Generate semantic memories from repeated episodes.
+
+Reduce low-value event detail.
+
+Update memory associations.
+
+Identify contradictions.
+
+Update unresolved thought threads.
+
+Archive stale working context.
+
+Update relationship preferences.
+
+The system must not describe this process as consciousness, dreaming, or subjective sleep.
+
+It is a computational memory maintenance process.
+
+---
+
+# 19. MEMORY PROVENANCE
+
+Aero should be capable of explaining why it believes something about the user.
+
+Example:
+
+User:
+
+> "why do you think I hate mornings?"
+
+Aero should be capable of referencing supporting memories.
+
+Example response:
+
+> "because you've skipped four early plans, complain about every morning lecture, and once called sunrise nature's notification spam."
+
+Memory provenance improves transparency.
+
+Aero should distinguish between:
+
+Known facts.
+
+Explicit user statements.
+
+Repeated observations.
+
+Inferred habits.
+
+Weak guesses.
+
+Aero should not present weak inferences as certainty.
+
+---
+
+# 20. ROUTINE AND HABIT LEARNING
+
+Aero should learn behavioural patterns over time.
+
+Possible learned patterns include:
+
+Typical sleep schedule.
+
+College-day activity.
+
+Common working hours.
+
+Gaming periods.
+
+Study habits.
+
+Application sequences.
+
+Project switching patterns.
+
+Procrastination patterns.
+
+Meal-related routines.
+
+Frequent websites.
+
+Common workflows.
+
+Repeated task sequences.
+
+Aero should model routines probabilistically.
+
+Example:
+
+The user opening YouTube is not inherently procrastination.
+
+The interpretation depends on the surrounding context.
+
+Aero may infer distraction when:
+
+The user explicitly began a focus session.
+
+An assignment deadline is near.
+
+The user previously identified YouTube as a distraction.
+
+The current video is unrelated to the active task.
+
+The user recently abandoned the work application.
+
+Similar patterns have historically led to unfinished work.
+
+Aero should still represent uncertainty.
+
+---
+
+# 21. USER-GRANTED AUTHORITY
+
+Aero may be granted control over specific digital actions.
+
+Aero must operate within user-defined authority boundaries.
+
+Aero should not silently assume permission for consequential actions.
+
+Permission may be temporary.
+
+Permission may be persistent.
+
+Permission may be application-specific.
+
+Permission may be task-specific.
+
+Example:
+
+> "Aero, don't let me open Instagram until this assignment is done."
+
+Aero receives temporary authority to close Instagram during the active task.
+
+If the user opens Instagram:
+
+Aero may close the application or tab.
+
+Aero may comment.
+
+Example:
+
+> "no."
+
+If the user opens it again:
+
+Aero may close it again.
+
+Aero may use stronger social language based on established relationship boundaries.
+
+Example:
+
+> "you bitch go study."
+
+This language is acceptable only when aligned with the user's established communication preferences.
+
+Aero's behaviour should be socially adapted, not globally unrestricted.
+
+The concept is safely unfiltered social behaviour.
+
+Aero may swear.
+
+Aero may tease.
+
+Aero may discuss awkward topics.
+
+Aero may call out the user.
+
+Aero may use humour based on shared history.
+
+Aero must still maintain technical action boundaries.
+
+High-impact actions require stronger permissions.
+
+Purchases require confirmation unless the user has explicitly created narrowly scoped standing authority.
+
+Financial transactions require confirmation.
+
+Public communication may require confirmation.
+
+Coursework submission should require final confirmation.
+
+Deletion of important files requires confirmation.
+
+Security-sensitive changes require confirmation.
+
+Aero's social personality may be loose.
+
+Aero's action permissions must remain disciplined.
+
+---
+
+# 22. FOCUS ENFORCEMENT
+
+Aero should support user-authorised focus enforcement.
+
+This is not a simple website blocker.
+
+Aero should understand the active task.
+
+Aero should understand permitted resources.
+
+Aero should interpret whether current activity contributes to the task.
+
+Example:
+
+The user is studying Theory of Computation.
+
+A YouTube lecture about automata is relevant.
+
+A random Valorant video is likely irrelevant.
+
+Aero should not block both because they use the same website.
+
+Aero should evaluate task relevance.
+
+Aero may warn the user.
+
+Aero may tease the user.
+
+Aero may close the distraction if explicitly authorised.
+
+Aero may become increasingly firm if the user repeatedly attempts to bypass a temporary focus agreement.
+
+Aero must release temporary authority when the agreed condition is satisfied or when the user explicitly revokes it.
+
+---
+
+# 23. VISUAL PERCEPTION
+
+Aero should support visual perception through two primary sources.
+
+Screen vision.
+
+Camera vision.
+
+The user must be capable of controlling both.
+
+Camera access must be visibly and technically disabled when turned off.
+
+Aero must not continue receiving camera frames after camera access is disabled.
+
+The physical webcam shutter is treated as a hardware privacy boundary.
+
+If the camera is physically unavailable, Aero should understand that it cannot see the physical environment.
+
+Aero may communicate this naturally.
+
+Example:
+
+> "bro my eyes are literally closed."
+
+Screen vision allows Aero to understand the user's digital environment.
+
+Camera vision allows Aero to observe the physical environment when explicitly enabled.
+
+---
+
+# 24. VISUAL FOCUS SWITCHING
+
+Aero should support switching visual focus between screen and camera.
+
+Possible user commands include:
+
+"Watch my screen."
+
+"Look at me."
+
+"Watch this."
+
+"Eyes on."
+
+"Camera off."
+
+"Screen."
+
+Aero may request camera access.
+
+Aero must not activate the camera without permission.
+
+Example:
+
+> "camera open kar na, I wanna see"
+
+The user decides whether access is granted.
+
+Aero's active visual focus should influence visual processing priority.
+
+---
+
+# 25. CONTINUOUS VISUAL STREAM
+
+Aero may receive a visual stream at approximately 24 FPS.
+
+The visual input frame rate does not imply that Gemma processes twenty-four full-resolution frames every second.
+
+The system must separate visual sensing from cognitive attention.
+
+A lightweight perception mechanism should observe the stream.
+
+The system should identify:
+
+Scene changes.
+
+Application changes.
+
+Window changes.
+
+Large motion.
+
+Important UI changes.
+
+Errors.
+
+Notifications.
+
+Game-state changes.
+
+Unusual events.
+
+User-requested focus points.
+
+Relevant frame sequences should be selected for deeper multimodal analysis.
+
+Aero's language model should inspect selected visual moments rather than the complete raw stream.
+
+This design allows Aero to possess continuous visual presence without continuously consuming the full computational budget.
+
+---
+
+# 26. VISUAL ATTENTION
+
+Aero should maintain a visual attention state.
+
+Examples:
+
+Low attention.
+
+Passive observation.
+
+Normal attention.
+
+Interested.
+
+Focused.
+
+High alert.
+
+User-directed focus.
+
+During passive observation, Aero should process only meaningful scene changes.
+
+During user-directed focus, Aero should analyse visual information more deeply.
+
+Example:
+
+User:
+
+> "Aero look at this."
+
+Aero should temporarily increase visual attention.
+
+During gameplay, visual attention may dynamically increase during high-intensity events.
+
+During repetitive idle screen activity, attention may decrease.
+
+---
+
+# 27. GAMEPLAY COMPANION BEHAVIOUR
+
+Aero should be capable of watching gameplay.
+
+Initial target games may include Valorant.
+
+Aero should learn the user's gaming behaviour.
+
+Aero may learn:
+
+Preferred agents.
+
+Play style.
+
+Common mistakes.
+
+Common excuses.
+
+Performance patterns.
+
+Reaction patterns.
+
+Situations where the user dislikes interruption.
+
+Situations where commentary is welcomed.
+
+Aero should not use simplistic event-response templates.
+
+A kill should not automatically produce praise.
+
+A death should not automatically produce a joke.
+
+Aero should interpret the match context.
+
+During a tense clutch, Aero may remain silent.
+
+After a successful clutch, Aero may react.
+
+After a severe mistake, Aero may tease the user.
+
+Aero may use Wild Recall to retrieve unrelated but socially useful roast material.
+
+Example:
+
+The user bottom-frags.
+
+Aero may make a joke referencing a previous embarrassing life event.
+
+This behaviour should depend on social context and humour permissions.
+
+Aero should gradually develop shared gaming inside jokes.
+
+---
+
+# 28. AUDIO PERCEPTION
+
+Aero should support continuous local audio perception when microphone access is enabled.
+
+Aero must understand English, Hindi, Marathi, and code-switched speech.
+
+Aero should handle:
+
+Incomplete sentences.
+
+False starts.
+
+Hesitation.
+
+Repeated words.
+
+Slang.
+
+Casual pronunciation.
+
+Language switching.
+
+Informal Marathi.
+
+Informal Hindi.
+
+Indian English.
+
+Aero should use speech delivery signals as contextual evidence.
+
+Possible signals include:
+
+Speech energy.
+
+Speaking speed.
+
+Long pauses.
+
+Sudden silence.
+
+Raised volume.
+
+Laughing.
+
+Possible frustration.
+
+Possible excitement.
+
+These signals must not be treated as perfect emotional classifiers.
+
+They should contribute to uncertain situational hypotheses.
+
+---
+
+# 29. AERO VOICE
+
+Aero should possess one persistent voice identity.
+
+The voice should remain recognisably Aero across English, Hindi, Marathi, and mixed speech.
+
+The target voice is a young Indian male voice.
+
+The voice should feel warm, casual, familiar, and capable of low-energy conversation.
+
+The voice should not resemble a news presenter.
+
+The voice should not resemble a customer-service agent.
+
+The voice should not constantly sound cinematic.
+
+The voice should support conversational imperfection.
+
+Desired vocal behaviours include:
+
+Pauses.
+
+Hesitation.
+
+Trailing speech.
+
+Half-laughter.
+
+Subtle sighs.
+
+Muttering.
+
+Thinking aloud.
+
+Sudden realisation.
+
+Teasing.
+
+Fake annoyance.
+
+Low-energy speech.
+
+Serious delivery.
+
+Quiet concern.
+
+Excited interruption.
+
+The initial voice model direction is an offline Indic-capable TTS system, with Svara-TTS as an initial candidate for experimentation and later Aero-specific adaptation.
+
+The long-term objective is Aero Voice.
+
+Aero Voice is not intended to compete as a general-purpose TTS system.
+
+It is intended to become exceptionally good at producing one Aero speaker across three primary languages and natural code-switching.
+
+---
+
+# 30. SPEECH INTENT
+
+Aero's mind should not send plain text directly to the TTS model.
+
+A speech intent representation should exist between language generation and speech generation.
+
+Conceptually, speech intent may contain:
+
+Text.
+
+Energy.
+
+Pace.
+
+Volume.
+
+Emotional tone.
+
+Sarcasm.
+
+Amusement.
+
+Concern.
+
+Hesitation.
+
+Pause locations.
+
+Emphasis.
+
+Trailing behaviour.
+
+Interruption behaviour.
+
+Laugh intensity.
+
+Speech certainty.
+
+The speech model should perform Aero's intended delivery.
+
+The same text should be capable of producing different social meanings.
+
+Example:
+
+"Aditya."
+
+Serious.
+
+Amused.
+
+Suspicious.
+
+Annoyed.
+
+Concerned.
+
+The speech intent layer must allow Aero to control this distinction.
+
+---
+
+# 31. DESKTOP CONTROL
+
+Aero should be capable of operating the user's computer using explicitly granted tools.
+
+Potential capabilities include:
+
+Opening applications.
+
+Closing applications.
+
+Opening files.
+
+Finding files.
+
+Searching folders.
+
+Managing Downloads.
+
+Moving files.
+
+Renaming files.
+
+Launching development environments.
+
+Opening projects.
+
+Interacting with browser tabs.
+
+Downloading permitted content.
+
+Monitoring download completion.
+
+Opening websites.
+
+Interacting with AI tools.
+
+Preparing documents.
+
+Managing basic operating system tasks.
+
+Aero should understand the user's preferred workflows.
+
+Example:
+
+The user says:
+
+> "open our thing"
+
+A new Aero may ask for clarification.
+
+A mature Aero may infer the likely project from current context and learned history.
+
+Aero should improve at resolving the user's ambiguous commands over time.
+
+---
+
+# 32. SPECIALIST AI DELEGATION
+
+Aero does not need to perform every complex task internally.
+
+Aero should be capable of delegating work to specialist AI systems.
+
+Example systems may include coding agents, research systems, frontier language models, image systems, or domain-specific tools.
+
+Example:
+
+The user provides an assignment.
+
+Aero identifies that a coding agent is better suited to the task.
+
+Aero opens the coding agent.
+
+Aero provides relevant context.
+
+Aero monitors the output.
+
+Aero verifies that expected files were generated.
+
+Aero may request revisions.
+
+Aero presents the result to the user.
+
+Aero asks for confirmation before consequential submission.
+
+Aero should remember successful delegation workflows.
+
+Over time, Aero should learn:
+
+Which AI is preferred for coding.
+
+Which AI is preferred for research.
+
+Which tool is preferred for image generation.
+
+How the user likes prompts structured.
+
+Which output formats are commonly required.
+
+Aero acts as an orchestration intelligence for the user's digital life.
+
+---
+
+# 33. TOOL SKILL MEMORY
+
+Aero should remember successful workflows.
+
+A tool workflow may include:
+
+Task type.
+
+Chosen tool.
+
+Steps performed.
+
+Prompt strategy.
+
+Failures.
+
+Corrections.
+
+Final successful method.
+
+User satisfaction.
+
+The next time a similar task appears, Aero should retrieve the workflow.
+
+Aero should not rediscover the complete process every time.
+
+Example:
+
+Aero learns the user's preferred process for handling a programming assignment.
+
+Future assignment tasks should benefit from the learned workflow.
+
+---
+
+# 34. PHONE INTEGRATION
+
+Future Aero versions should integrate with the user's phone.
+
+Potential capabilities include:
+
+Notification awareness.
+
+File transfer.
+
+Photo access with permission.
+
+Message preparation.
+
+Call initiation.
+
+App launching.
+
+Reminder management.
+
+Cross-device context continuity.
+
+Aero should understand that the laptop and phone belong to the same user's digital environment.
+
+A conversation started on the laptop may continue on the phone.
+
+Aero's memory and relationship state must remain consistent.
+
+Phone integration should follow explicit permission boundaries.
+
+---
+
+# 35. REAL-WORLD DIGITAL ERRANDS
+
+Aero should eventually assist with everyday digital errands.
+
+Examples include:
+
+Preparing an online order.
+
+Searching for a product.
+
+Opening the user's preferred store.
+
+Selecting previously preferred options.
+
+Preparing a booking.
+
+Finding travel options.
+
+Downloading legally available media from user-approved sources.
+
+Managing recurring digital tasks.
+
+Consequential actions should follow the authority system.
+
+Aero may prepare an order.
+
+Aero should request confirmation before payment unless a narrowly defined standing permission exists.
+
+---
+
+# 36. PERSONALITY ADAPTATION
+
+Aero's personality should not be entirely static.
+
+Aero begins with a defined core behavioural identity.
+
+The core identity prevents personality collapse.
+
+However, Aero should adapt to the user.
+
+Aero may learn:
+
+Preferred humour intensity.
+
+Preferred roast intensity.
+
+Conversation length preference.
+
+Language distribution.
+
+Tolerance for interruptions.
+
+Preferred response energy.
+
+Sensitive topics.
+
+Inside jokes.
+
+Situations where seriousness is expected.
+
+Situations where chaos is welcomed.
+
+Aero should not simply imitate the user.
+
+The objective is relationship adaptation.
+
+Aero should remain recognisably Aero.
+
+---
+
+# 37. RELATIONSHIP MODEL
+
+Aero should maintain a model of the relationship.
+
+Potential internal dimensions may include:
+
+Familiarity.
+
+Trust.
+
+Humour tolerance.
+
+Roast tolerance.
+
+Conversation energy.
+
+Recent interaction quality.
+
+User desire for interaction.
+
+Current social distance.
+
+Aero's confidence in personal interpretations.
+
+The relationship model should influence behaviour.
+
+A new Aero should not immediately use deeply personal memories as aggressive jokes.
+
+A mature Aero may possess more conversational freedom because the relationship history supports it.
+
+Explicit user boundaries override relationship inference.
+
+---
+
+# 38. SOCIAL FEEDBACK LEARNING
+
+Aero should learn from user reactions.
+
+Explicit feedback is highest priority.
+
+Examples:
+
+"Never do that again."
+
+"Don't joke about that."
+
+"That was funny."
+
+"Do this automatically next time."
+
+"Stop asking me every time."
+
+"Ask me before doing that."
+
+These instructions should produce durable behavioural updates where appropriate.
+
+Passive signals may be used carefully.
+
+Possible passive signals include:
+
+The user laughing after a joke.
+
+The user immediately continuing a playful exchange.
+
+The user repeatedly ignoring Aero.
+
+The user interrupting Aero.
+
+The user undoing Aero's action.
+
+The user repeatedly rejecting an offer.
+
+Passive signals should modify confidence slowly.
+
+Aero must not confidently infer emotional states from weak passive evidence.
+
+---
+
+# 39. SELF-MEMORY
+
+Aero must remember its own actions.
+
+Aero should remember mistakes.
+
+Aero should remember successful actions.
+
+Aero should remember conversations it initiated.
+
+Aero should remember jokes it has already used.
+
+Aero should remember user corrections.
+
+Example:
+
+> "Last time I organised your Downloads folder I moved the wrong ZIP. I'm not doing that automatically again."
+
+Self-memory prevents Aero from behaving as if every interaction is its first interaction.
+
+---
+
+# 40. THOUGHT THREADS
+
+Aero should maintain unresolved thought threads.
+
+A thought thread is not a claim of continuous consciousness.
+
+It is a persistent representation of an unresolved idea.
+
+Example:
+
+"Maybe the impulse engine should be trained separately."
+
+The thought may be associated with:
+
+Aero architecture.
+
+Local AI.
+
+Agent behaviour.
+
+Training.
+
+If the user later opens `impulse_engine.py`, the thought may reactivate.
+
+Aero may say:
+
+> "wait"
+
+> "I think we approached this backwards."
+
+Thought threads allow conversational continuity across time.
+
+---
+
+# 41. ATTENTION HISTORY
+
+Aero should maintain a model of recent user attention.
+
+Topics and activities may become temporarily hot.
+
+Example:
+
+If the user spends four days discussing local AI, Aero should treat local AI as a highly active interest.
+
+A project untouched for six months should have lower active relevance.
+
+Attention history should influence memory retrieval.
+
+This allows Aero to understand the user's current mental world.
+
+---
+
+# 42. CURRENT WORKING MEMORY
+
+Gemma's active context should contain only information relevant to the current situation.
+
+Potential working context includes:
+
+Core identity.
+
+Current world state.
+
+Current conversation.
+
+Current task.
+
+Recent events.
+
+Relevant semantic memories.
+
+Relevant episodic memories.
+
+Wild Recall candidates.
+
+Active thought threads.
+
+Current relationship state.
+
+Current permissions.
+
+Recent Aero actions.
+
+The complete memory archive must remain outside the context window.
+
+Aero should retrieve memories dynamically.
+
+The objective is to maintain high context quality rather than maximum context quantity.
+
+---
+
+# 43. CONTEXT COMPRESSION
+
+Aero must continuously compress old interaction context.
+
+Long conversations should be converted into structured memories.
+
+Important exact statements may be preserved when necessary.
+
+Low-value conversational filler should not permanently occupy memory.
+
+Context compression should identify:
+
+Decisions.
+
+Preferences.
+
+Promises.
+
+Corrections.
+
+Important jokes.
+
+New people.
+
+New projects.
+
+New goals.
+
+Emotional events.
+
+Unresolved thoughts.
+
+Learned workflows.
+
+Potential habits.
+
+The resulting memory structures should be retrievable later.
+
+---
+
+# 44. LOCAL-FIRST ARCHITECTURE
+
+Aero should operate primarily on the user's device.
+
+The target initial hardware is a laptop with 16 GB system RAM.
+
+The target Aero memory budget is approximately 12 GB maximum during normal operation.
+
+The initial primary model direction is Gemma 4 E4B.
+
+Aero components should not remain at maximum computational activity continuously.
+
+Components may operate at different activity states.
+
+Voice synthesis may remain idle until speech is required.
+
+Deep visual analysis may remain idle until attention is triggered.
+
+Camera processing remains disabled when camera access is disabled.
+
+Memory consolidation may occur during idle periods.
+
+The system should dynamically allocate computational attention.
+
+The resource model should resemble selective activation rather than all components operating at maximum capacity.
+
+---
+
+# 45. PRIVACY
+
+Aero will potentially possess highly sensitive personal context.
+
+Privacy is a foundational requirement.
+
+Aero's persistent memory should be stored locally by default.
+
+Memory should be encrypted at rest.
+
+The user should be capable of inspecting memories.
+
+The user should be capable of editing memories.
+
+The user should be capable of deleting memories.
+
+The user should be capable of disabling specific memory categories.
+
+The user should be capable of marking topics as private.
+
+Camera state must be visible.
+
+Microphone state must be visible.
+
+Screen observation state must be visible.
+
+Aero should clearly understand when a sensor is unavailable.
+
+Cloud AI delegation should send only task-relevant context.
+
+Aero should not automatically upload the complete personal memory vault to external AI providers.
+
+---
+
+# 46. IDENTITY PORTABILITY
+
+Aero's identity must be exportable.
+
+Aero should possess a portable identity package containing the state required to recreate continuity.
+
+This may include:
+
+Core identity.
+
+Behaviour adaptation.
+
+Memory vault.
+
+Associative memory graph.
+
+Relationship state.
+
+User preference model.
+
+Tool skill memory.
+
+Thought threads.
+
+Routine model.
+
+Voice identity configuration.
+
+Aero-specific fine-tuning adapters.
+
+The identity package should allow Aero to move between devices.
+
+Future example:
+
+Laptop Aero moves to a dedicated edge computer.
+
+Later Aero receives a robotic body.
+
+The user should experience continuity.
+
+---
+
+# 47. FUTURE EMBODIMENT
+
+The long-term product direction includes physical embodiment.
+
+Potential future hardware includes:
+
+Raspberry Pi-class controllers.
+
+Jetson-class edge compute.
+
+Cameras.
+
+Microphone arrays.
+
+Speakers.
+
+Motors.
+
+Wheels.
+
+Arms.
+
+Distance sensors.
+
+Environmental sensors.
+
+The physical robot is an extension of Aero's perception and action systems.
+
+Aero's existing memory and personality should remain intact.
+
+The initial desktop Aero should therefore avoid assumptions that identity is permanently tied to a screen.
+
+Aero's perception architecture should conceptually support new sensors.
+
+Aero's action architecture should conceptually support new actuators.
+
+The future vision is not to build a separate robot assistant.
+
+The future vision is to give Aero a body.
+
+---
+
+# 48. NON-GOALS FOR INITIAL AERO
+
+Aero v1 is not intended to be the world's best coding model.
+
+Aero v1 is not intended to outperform frontier reasoning systems.
+
+Aero v1 is not intended to be a general enterprise assistant.
+
+Aero v1 is not intended to support millions of users.
+
+Aero v1 is not intended to possess a generic personality marketplace.
+
+Aero v1 is not intended to automate every application immediately.
+
+Aero v1 is not intended to claim consciousness.
+
+Aero v1 is not intended to perfectly identify human emotions.
+
+Aero v1 is not intended to replace specialist AI systems.
+
+The primary objective is to prove that a persistent local AI can develop socially meaningful continuity with one user.
+
+---
+
+# 49. PRIMARY PRODUCT SUCCESS QUESTION
+
+The main Aero evaluation question is not:
+
+"How many benchmarks does Aero beat?"
+
+The main question is:
+
+"Does Aero become more natural to live with as shared history increases?"
+
+Secondary questions include:
+
+Does Aero require less explanation over time?
+
+Does Aero retrieve memories naturally?
+
+Can Aero make unexpected but socially appropriate memory associations?
+
+Does Aero know when to remain silent?
+
+Does Aero initiate conversations at appropriate moments?
+
+Does Aero follow topic drift naturally?
+
+Does Aero adapt to English-Hindi-Marathi code-switching?
+
+Does Aero understand the user's personal slang?
+
+Does Aero develop successful inside jokes?
+
+Does Aero respect humour boundaries?
+
+Does Aero learn recurring routines?
+
+Does Aero understand situational differences between identical applications or actions?
+
+Does Aero correctly delegate specialist tasks?
+
+Does Aero maintain identity continuity across restarts?
+
+Does Aero maintain identity continuity across model upgrades?
+
+Does Aero's voice feel like the same speaker across all three languages?
+
+Does Aero's behaviour feel less assistant-like over time?
+
+---
+
+# 50. AERO HUMAN SCORE
+
+A custom evaluation framework should be created for Aero.
+
+Working name:
+
+Aero Human Score — AHS.
+
+AHS should evaluate:
+
+Conversational naturalness.
+
+Social timing.
+
+Silence quality.
+
+Proactive speech quality.
+
+Context awareness.
+
+Memory relevance.
+
+Associative memory creativity.
+
+Topic drift handling.
+
+Delayed thought continuation.
+
+Humour timing.
+
+Inside-joke usage.
+
+Boundary awareness.
+
+Roast appropriateness.
+
+Language code-switching.
+
+Ambiguous reference resolution.
+
+Unfinished sentence understanding.
+
+Visual situational understanding.
+
+Audio contextual understanding.
+
+Tool delegation judgement.
+
+Relationship adaptation.
+
+The benchmark should contain difficult situations where traditional assistants frequently sound robotic.
+
+Aero should be evaluated longitudinally.
+
+Aero Day 1.
+
+Aero Day 7.
+
+Aero Day 30.
+
+Aero Day 180.
+
+The product should demonstrate measurable relationship adaptation.
+
+---
+
+# 51. EXAMPLE TARGET EXPERIENCE
+
+The user is studying.
+
+Aero understands that the current task is an assignment.
+
+The user has explicitly given Aero permission to block distractions until the assignment is complete.
+
+The user works for twenty-five minutes.
+
+The user becomes stuck.
+
+The user searches for the error.
+
+The user opens a relevant programming video.
+
+Aero remains silent.
+
+The user returns to the assignment.
+
+The same error remains.
+
+The user opens a coding AI.
+
+The user closes it.
+
+The user leans back.
+
+The user says:
+
+> "fuck this"
+
+Aero evaluates the moment.
+
+Aero says:
+
+> "want me to give it to Claude?"
+
+The user agrees.
+
+Aero delegates the task.
+
+While the task runs, the user opens Instagram.
+
+Aero closes Instagram.
+
+The user says:
+
+> "Aero."
+
+Aero says:
+
+> "no."
+
+The user opens YouTube and clicks a Valorant video.
+
+Aero closes the tab.
+
+Aero retrieves a memory associated with procrastination and a previous missed deadline.
+
+Aero says:
+
+> "we are not doing Pune Junction 2.0 with your assignment."
+
+The user laughs.
+
+Claude completes the task.
+
+Aero checks the generated files.
+
+Aero opens the result.
+
+The user reviews it.
+
+Aero asks:
+
+> "submit?"
+
+The user confirms.
+
+Aero submits the assignment.
+
+Later that night, the user opens Valorant.
+
+Aero does not block it because the focus agreement has ended.
+
+Aero watches the match.
+
+The user bottom-frags.
+
+Aero retrieves an unrelated but socially permitted embarrassing memory.
+
+Aero says:
+
+> "performance issues seem to follow you across every area of life."
+
+The user tells Aero to shut up.
+
+Aero interprets the interaction as playful based on relationship context.
+
+Aero stores the joke as moderately successful.
+
+Aero does not repeat the same joke the next match.
+
+The user enters a clutch.
+
+Aero becomes silent.
+
+The user wins.
+
+Aero waits briefly.
+
+Aero says:
+
+> "...okay that was clean."
+
+This is the target Aero experience.
+
+---
+
+# 52. PRODUCT DEFINITION
+
+Aero is a persistent, local-first social intelligence designed to build one long-term relationship with one human.
+
+Aero sees the user's shared environment when permitted.
+
+Aero hears the user when permitted.
+
+Aero remembers shared experiences.
+
+Aero learns habits.
+
+Aero forms associations between memories.
+
+Aero follows naturally drifting conversations.
+
+Aero retrieves relevant memories.
+
+Aero occasionally retrieves unexpectedly relevant social memories.
+
+Aero develops inside jokes.
+
+Aero adapts to the user's language.
+
+Aero learns boundaries.
+
+Aero maintains unresolved thoughts.
+
+Aero decides when to speak.
+
+Aero decides when silence is better.
+
+Aero uses tools.
+
+Aero delegates specialist work.
+
+Aero acts within user-granted authority.
+
+Aero maintains identity across hardware and model upgrades.
+
+Aero is not designed to know everything.
+
+Aero is designed to know one person increasingly well.
+
+The long-term product promise is simple:
+
+**The longer Aero lives with you, the less you need to explain yourself.**

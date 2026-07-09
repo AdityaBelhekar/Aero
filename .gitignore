@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Aero runtime data — NEVER commit the vault or backups (contains personal memory)
+/data/
+*.vault
+*.vault-wal
+*.vault-shm
+*.aero-backup
+/models/
+
+# Node / UI
+node_modules/
+ui/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
