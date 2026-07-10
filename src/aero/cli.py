@@ -152,8 +152,10 @@ def cmd_consolidate(cfg: Config, _args) -> int:
     with _open(cfg, create=False) as v:
         store = MemoryStore(v, actor="consolidation")
         res = Consolidator(store, llm, emb).run()
-    print(f"consolidated: processed={res.processed} memories={res.memories_created} "
+    print(f"consolidated: processed={res.processed} new={res.memories_created} "
           f"edges={res.edges_created} skipped={res.skipped}")
+    print(f"beliefs: reinforced={res.beliefs_reinforced} revised={res.beliefs_revised} "
+          f"decayed={res.beliefs_decayed} dormant={res.beliefs_dormant}")
     return 0
 
 

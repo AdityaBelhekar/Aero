@@ -9,6 +9,7 @@ store for "memories with vectors".
 
 from __future__ import annotations
 
+import json
 from typing import Iterator
 
 from aero.cognition.embeddings import Vector, pack_vector, unpack_vector
@@ -103,8 +104,23 @@ class MemoryStore:
                 "weight": weight, "created_at": now_iso(),
             }, pk_col="src_id")
 
-    def reinforce_belief(self, memory_id: str, *, confidence: float, reason: str) -> None:
-        """Update a semantic belief and record the revision (AERO-EVO-003)."""
+    def reinforce_belief(
+        self,
+        memory_id: str,
+        *,
+        confidence: float,
+        reason: str,
+        new_summary: str | None = None,
+        increment_evidence: bool = True,
+    ) -> None:
+        """Revise a semantic belief, recording the prior state (AERO-EVO-003).
+
+        Handles all three evolution paths: reinforcement (higher confidence),
+        contradiction (``new_summary`` carries the corrected belief that keeps
+        useful history), and staleness decay (lower confidence, no new evidence).
+        The old state is always preserved in ``beliefs_history`` so provenance
+        can explain both the current belief and how it got here.
+        """
         before = self.vault.conn.execute(
             "SELECT confidence, evidence_count, summary FROM memories WHERE id=?",
             (memory_id,),
@@ -115,19 +131,35 @@ class MemoryStore:
             "SELECT COALESCE(MAX(revision_no),0)+1 AS n FROM beliefs_history WHERE belief_id=?",
             (memory_id,),
         ).fetchone()["n"]
+        prior = json.dumps({
+            "confidence": before["confidence"],
+            "evidence_count": before["evidence_count"],
+            "summary": before["summary"],
+        }, ensure_ascii=False)
         self.repo.insert("beliefs_history", {
             "belief_id": memory_id,
             "revision_no": rev,
-            "prior_state": f'{{"confidence": {before["confidence"]}, '
-                           f'"evidence_count": {before["evidence_count"]}}}',
+            "prior_state": prior,
             "reason": reason,
             "ts": now_iso(),
         }, pk_col="belief_id")
-        self.repo.update("memories", memory_id, {
-            "confidence": confidence,
-            "evidence_count": before["evidence_count"] + 1,
+        changes = {
+            "confidence": max(0.0, min(1.0, confidence)),
+            "evidence_count": before["evidence_count"] + (1 if increment_evidence else 0),
             "updated_at": now_iso(),
-        })
+        }
+        if new_summary is not None:
+            changes["summary"] = new_summary
+        self.repo.update("memories", memory_id, changes)
+
+    def set_status(self, memory_id: str, status: str) -> None:
+        self.repo.update("memories", memory_id, {"status": status, "updated_at": now_iso()})
+
+    def active_semantic_beliefs(self) -> list[Memory]:
+        rows = self.vault.conn.execute(
+            "SELECT * FROM memories WHERE kind='semantic' AND status='active'"
+        ).fetchall()
+        return [_row_to_memory(r) for r in rows]
 
     # -- reads -------------------------------------------------------------
     def get(self, memory_id: str) -> Memory | None:
