@@ -9,31 +9,39 @@ See [`Aero-PRD-v0.2.md`](Aero-PRD-v0.2.md) for the product requirements and
 
 ## Status
 
-**Milestone 1 — Skeleton & Vault** (PRD Phase 0). The encrypted, versioned,
-backed-up memory vault is the foundation everything else is a client of.
+**Milestone 2 — Memory Core** working (PRD Phase 0). Memory-in-the-loop chat with
+cross-session continuity: a preference told in one session survives consolidation
+and a process restart, and shapes Aero's reply in a fresh session, with provenance.
 
-Implemented so far:
+Done:
 
-- Vault: SQLite (WAL) with schema v1, pluggable encrypted-connection factory,
-  migration bootstrap.
-- Audit journal on every mutation (`AERO-VLT-002`).
-- Atomic snapshot backup + tested restore round-trip (`AERO-VLT-004`, risk R-8).
-- `aero` CLI: `init`, `status`, `backup`, `restore`, `smoke`.
+- **Milestone 1 — Vault:** SQLite (WAL) schema v1, pluggable encryption, migrations,
+  audit journal on every mutation (`AERO-VLT-002`), atomic backup + tested restore
+  (`AERO-VLT-004`).
+- **Spike S-1:** Gemma 4 E4B viable via Ollama (`spikes/S1_VERDICT.md`). Note: it's a
+  reasoning model — run with thinking off.
+- **Spike S-2:** embeddinggemma 90% top-1 on romanised Hindi/Marathi
+  (`spikes/S2_VERDICT.md`).
+- **Milestone 2 — Memory core:** typed memory store, LLM consolidation (write path),
+  associative graph, hybrid retrieval (vector anchor → graph spread → rerank) with
+  Wild Recall + social-fit filtering, working-set assembler, and `aero chat`.
+
+Requires [Ollama](https://ollama.com) with `gemma4:e4b` and `embeddinggemma` pulled.
 
 ## Quick start
 
 ```sh
-# from the repo root
 python -m aero.cli init            # create the vault under ./data
-python -m aero.cli status          # show vault info
-python -m aero.cli smoke           # prove state survives a simulated restart
+python -m aero.cli chat            # memory-in-the-loop chat with Aero
+python -m aero.cli consolidate     # turn the chat into durable memory
+python -m aero.cli status          # vault info + memory counts
 python -m aero.cli backup          # snapshot the vault
+python -m aero.cli smoke           # prove state survives a simulated restart
 ```
 
-No third-party packages are required for Milestone 1 — it runs on the Python
-3.11 standard library. Encryption at rest activates automatically if
-`sqlcipher3-binary` is installed (`pip install -e ".[crypto]"`); otherwise the
-vault is created as an explicitly-marked plaintext file and warns you.
+The vault runs on the stdlib; encryption at rest activates if `sqlcipher3-binary`
+is installed (`pip install -e ".[crypto]"`), else it warns and uses plaintext.
+Chat/consolidate need Ollama running.
 
 ## Layout
 

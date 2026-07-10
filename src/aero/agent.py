@@ -32,13 +32,33 @@ class AeroAgent:
         embedder: EmbeddingService,
         *,
         world: WorldState | None = None,
+        world_provider=None,
     ):
         self.store = store
         self.llm = llm
         self.embedder = embedder
         self.pipeline = RetrievalPipeline(store, embedder)
         self.world = world
+        # Optional perception.WorldStateProvider; when set, world state is
+        # refreshed from live Tier-0 signals each turn.
+        self.world_provider = world_provider
         self.conversation: list[Turn] = []
+
+    def _refresh_world(self) -> None:
+        if self.world_provider is None:
+            return
+        from datetime import datetime
+
+        sample, switched = self.world_provider.poll()
+        self.world = WorldState.from_tier0(
+            sample, time_str=datetime.now().strftime("%a %H:%M")
+        )
+        if switched and sample.ok:
+            # An app switch is a world-state delta worth remembering.
+            self._log_event(
+                "world", f"active app changed to {sample.process_name} "
+                         f"({sample.window_title})"
+            )
 
     def _log_event(self, speaker: str, text: str) -> None:
         self.store.vault.conn.execute(
@@ -48,6 +68,7 @@ class AeroAgent:
         self.store.vault.conn.commit()
 
     def respond(self, user_text: str) -> str:
+        self._refresh_world()
         self._log_event("Aditya", user_text)
         self.conversation.append(Turn("user", user_text))
 

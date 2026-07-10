@@ -35,7 +35,20 @@ class WorldState:
     time_str: str | None = None
     active_app: str | None = None
     window_title: str | None = None
+    activity_level: str | None = None   # active | idle | away
     extra: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_tier0(cls, sample, *, time_str: str | None = None) -> "WorldState":
+        """Build a world state from a perception.Tier0Sample."""
+        if not getattr(sample, "ok", False):
+            return cls(time_str=time_str)
+        return cls(
+            time_str=time_str,
+            active_app=sample.process_name,
+            window_title=sample.window_title,
+            activity_level=sample.activity_level,
+        )
 
     def render(self) -> str:
         bits = []
@@ -45,6 +58,8 @@ class WorldState:
             bits.append(f"active app: {self.active_app}")
         if self.window_title:
             bits.append(f"window: {self.window_title}")
+        if self.activity_level:
+            bits.append(f"user: {self.activity_level}")
         for k, v in self.extra.items():
             bits.append(f"{k}: {v}")
         return "; ".join(bits)

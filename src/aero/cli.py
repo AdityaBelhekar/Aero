@@ -165,7 +165,7 @@ def cmd_chat(cfg: Config, _args) -> int:
     from aero.cognition.embeddings import OllamaEmbedder
     from aero.cognition.ollama_backend import OllamaCognition
     from aero.memory.store import MemoryStore
-    from aero.working_set import WorldState
+    from aero.perception import WorldStateProvider
 
     llm, emb = OllamaCognition(), OllamaEmbedder()
     if not llm.health_check():
@@ -178,8 +178,8 @@ def cmd_chat(cfg: Config, _args) -> int:
     cfg.ensure_dirs()
     with _open(cfg) as v:
         store = MemoryStore(v, actor="user")
-        world = WorldState(time_str=datetime.now().strftime("%a %H:%M"))
-        agent = AeroAgent(store, llm, emb, world=world)
+        # Live Tier-0 perception: Aero sees the active window/process each turn.
+        agent = AeroAgent(store, llm, emb, world_provider=WorldStateProvider())
         n_mem = store.vault.conn.execute(
             "SELECT COUNT(*) AS n FROM memories WHERE summary NOT LIKE 'concept:%'"
         ).fetchone()["n"]
@@ -204,6 +204,35 @@ def cmd_chat(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_watch(cfg: Config, args) -> int:
+    """Print live Tier-0 world state — verify perception without the model."""
+    import time
+    from datetime import datetime
+
+    from aero.perception import WorldStateProvider
+    from aero.working_set import WorldState
+
+    provider = WorldStateProvider()
+    count = args.count if args.count else 0
+    print("Watching Tier-0 world state (Ctrl-C to stop)...")
+    try:
+        i = 0
+        while count == 0 or i < count:
+            sample, switched = provider.poll()
+            if not sample.ok:
+                print("  (Tier-0 sensing unavailable on this platform)")
+                return 0
+            ws = WorldState.from_tier0(sample, time_str=datetime.now().strftime("%H:%M:%S"))
+            flag = "  <-- app switch" if switched else ""
+            print(f"  {ws.render()}{flag}")
+            i += 1
+            if count == 0 or i < count:
+                time.sleep(args.interval)
+    except KeyboardInterrupt:
+        print()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="aero", description="Aero local companion")
     sub = p.add_subparsers(dest="command", required=True)
@@ -215,6 +244,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("smoke", help="run the Milestone-1 acceptance smoke test")
     sub.add_parser("chat", help="interactive memory-in-the-loop chat (Milestone 2)")
     sub.add_parser("consolidate", help="turn logged raw events into durable memory")
+    w = sub.add_parser("watch", help="print live Tier-0 world state (perception check)")
+    w.add_argument("--interval", type=float, default=1.0, help="seconds between samples")
+    w.add_argument("--count", type=int, default=0, help="number of samples (0 = forever)")
     return p
 
 
@@ -226,6 +258,7 @@ _HANDLERS = {
     "smoke": cmd_smoke,
     "chat": cmd_chat,
     "consolidate": cmd_consolidate,
+    "watch": cmd_watch,
 }
 
 
