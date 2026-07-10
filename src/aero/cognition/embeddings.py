@@ -90,6 +90,22 @@ class OllamaEmbedder(EmbeddingService):
             return []
         return self._embed_raw(texts)
 
+    def ensure_loaded(self, keep_alive: str = "30m") -> bool:
+        """Keep the embedder resident (daemon keep-warm). A tiny embed with
+        keep_alive loads the model and refreshes its unload timer."""
+        payload = {"model": self.model_name, "input": " ", "keep_alive": keep_alive}
+        try:
+            req = urllib.request.Request(
+                f"{self.host}/api/embed",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout):
+                return True
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return False
+
     def health_check(self) -> bool:
         try:
             req = urllib.request.Request(f"{self.host}/api/tags", method="GET")

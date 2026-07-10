@@ -122,6 +122,10 @@ def _apply_pragmas(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA journal_mode = WAL")     # durability + concurrent reads
     conn.execute("PRAGMA foreign_keys = ON")      # cascades in schema depend on this
     conn.execute("PRAGMA synchronous = NORMAL")   # WAL-safe, faster than FULL
+    # Let the daemon and an interactive `aero chat` share the vault: WAL allows
+    # concurrent readers + one writer, and busy_timeout makes a brief write
+    # collision wait rather than fail.
+    conn.execute("PRAGMA busy_timeout = 5000")
 
 
 def _migrate(vault: Vault) -> None:

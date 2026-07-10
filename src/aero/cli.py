@@ -206,6 +206,28 @@ def cmd_chat(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_daemon(cfg: Config, args) -> int:
+    """Run Aero's always-on background process (keep-warm + idle consolidation)."""
+    from aero.daemon import AeroDaemon, DaemonConfig
+
+    dcfg = DaemonConfig()
+    if args.idle is not None:
+        dcfg.idle_consolidate_seconds = args.idle
+    daemon = AeroDaemon(cfg, dcfg)
+    if args.once:
+        # One tick for smoke-testing, then exit.
+        if not daemon.llm.health_check() or not daemon.emb.health_check():
+            print("Ollama models not available.")
+            return 1
+        daemon._warm_models()
+        daemon._running = True
+        daemon.tick()
+        daemon.shutdown()
+        print("daemon: single tick complete")
+        return 0
+    return daemon.start()
+
+
 def cmd_watch(cfg: Config, args) -> int:
     """Print live Tier-0 world state — verify perception without the model."""
     import time
@@ -249,6 +271,10 @@ def build_parser() -> argparse.ArgumentParser:
     w = sub.add_parser("watch", help="print live Tier-0 world state (perception check)")
     w.add_argument("--interval", type=float, default=1.0, help="seconds between samples")
     w.add_argument("--count", type=int, default=0, help="number of samples (0 = forever)")
+    d = sub.add_parser("daemon", help="run the always-on background process")
+    d.add_argument("--once", action="store_true", help="run a single tick and exit")
+    d.add_argument("--idle", type=float, default=None,
+                   help="idle seconds before consolidating (default 120)")
     return p
 
 
@@ -261,6 +287,7 @@ _HANDLERS = {
     "chat": cmd_chat,
     "consolidate": cmd_consolidate,
     "watch": cmd_watch,
+    "daemon": cmd_daemon,
 }
 
 

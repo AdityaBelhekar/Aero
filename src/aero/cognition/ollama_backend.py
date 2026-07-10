@@ -124,6 +124,24 @@ class OllamaCognition(CognitionService):
             parsed = None
         return parsed, result
 
+    def ensure_loaded(self, keep_alive: str = "30m") -> bool:
+        """Keep the model resident so the next turn isn't a ~40s cold load.
+
+        An empty-prompt /api/generate loads the model and sets its unload timer
+        without generating tokens. The daemon calls this periodically."""
+        payload = {"model": self.model_name, "keep_alive": keep_alive}
+        try:
+            req = urllib.request.Request(
+                f"{self.host}/api/generate",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout):
+                return True
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return False
+
     def health_check(self) -> bool:
         try:
             req = urllib.request.Request(f"{self.host}/api/tags", method="GET")
