@@ -1,60 +1,68 @@
-# Spike S-3 Verdict — code-switched STT (PARTIAL / infrastructure)
+# Spike S-3 Verdict — code-switched STT (FINAL)
 
-**Date:** 2026-07-10
-**Backend:** faster-whisper 1.2.1 (CTranslate2), int8, CPU
-**Hardware:** Windows 11, 16 GB RAM laptop, CPU-only (torch installed is +cpu)
+**Date:** 2026-07-11
+**Backend:** faster-whisper 1.2.1 (CTranslate2), int8, CPU-only
+**Hardware:** Windows 11, 16 GB RAM laptop
+**Audio:** Aditya's own 10 code-switched recordings (`spikes/s3_testset/01..10.wav`)
 **Probe:** `spikes/s3_stt_probe.py`
 
-## Status: **infrastructure complete, pipeline validated; accuracy verdict BLOCKED on real recordings.**
+## Result: **`small` (Whisper) is the working pick for Milestone 3, push-to-talk.**
 
-The whole STT chain works end-to-end and the speed/accuracy tradeoff on this CPU
-is characterised. What's missing is the thing only Aditya can provide: his own
-code-switched speech. Synthetic English (Windows SAPI) was used to validate the
-pipeline, not to judge multilingual accuracy.
+The headline WER numbers are misleading — read the outputs, not just the scores.
 
-## Measured (clean English, SAPI audio — pipeline smoke test)
+## Measured on Aditya's real voice
 
-| Model | mean WER | mean RTF (warm) | Fit for live voice? |
-|---|---|---|---|
-| `small` (int8) | 0.00 | ~1.7 (2.0 incl. load) | **No** — slower than realtime on CPU |
-| `base` (int8)  | 0.08 | ~0.5 | **Yes** — comfortably faster than realtime |
+| Model | mean WER | mean CER | mean RTF | Reads code-switch? | Realtime? |
+|---|---|---|---|---|---|
+| `base` (int8)  | 0.56 | 0.30 | ~0.6 | **No** — mangles it | Yes |
+| `small` (int8) | 1.14* | 0.84* | ~1.5 median** | **Yes** (outputs Devanagari) | Borderline (PTT ok) |
 
-RTF = compute ÷ audio. Must be < 1.0 for live voice (PRD Section 24). Short clips
-inflate RTF (fixed VAD/beam overhead); real utterances amortise it. `beam_size=5`
-was used — greedy (`beam_size=1`) would be faster still.
+\* `small`'s WER/CER are inflated by a **script mismatch**, not comprehension —
+see below. \*\* mean RTF 3.94 is skewed by two outliers (a catastrophic clip at
+15× and the cold-load clip at 8.8×); the healthy clips sit ~1.4–1.75×.
 
-## The real finding (risk R-3 confirmed)
+## The key finding: `small` understands, it just writes Devanagari
 
-On a CPU there's genuine tension between **multilingual accuracy** (wants a bigger
-model — `small`/`medium`) and **realtime latency** (wants a smaller model —
-`base`/`tiny`). Clean English hides this because even `base` nails it; Marathi/
-Hindi code-switch is where `base` will likely weaken and force `small`, which is
-too slow on CPU. Paths forward, in order:
+`base` genuinely fails on code-switch ("mala vatat this approach wrong aahe" →
+"Malavattadis approach ranga hai"). `small` **comprehends** it and transcribes
+into native Devanagari:
 
-1. **Get Aditya's recordings** (spikes/s3_testset/README.md, ~15 min) and run
-   both `base` and `small`. This decides everything below.
-2. If `small` is needed for accuracy but too slow: try **greedy decoding**,
-   **distil-whisper** (2–4× faster, multilingual variants), or **GPU offload**
-   (needs a CUDA GPU + `compute_type=float16` — this box is CPU-only today).
-3. If Whisper-family accuracy on romanised Marathi is poor: **AI4Bharat
-   IndicWhisper / IndicConformer** (the R-3 fallback named in the plan).
-4. If none hit both bars on this hardware: **push-to-talk only** for Milestone 3
-   (transcribe after the user stops — RTF < 1.0 with `base` is fine for that),
-   defer open-mic until hardware/models improve.
+- ref: `mala vatat this approach wrong aahe model la context samajla pahije`
+- `small`: `मला वाट्त दिस अप्रोज ... मोडला कोंटेक समजल पाएज़े`  ← correct meaning
 
-## Delivered infrastructure
+The reference transcripts are romanised Latin, so string WER scores this as 100%
+wrong when it's actually right. Reading all 10: `small` substantially captures ~7
+of 10 (messy spelling, right content); `base` far fewer.
 
-- `aero/perception/stt.py` — `STTService` interface + `FasterWhisperBackend`
-  (model-swappable like cognition; IndicWhisper can drop in).
-- `aero/eval/wer.py` — WER + CER (CER reported because romanised spelling makes
-  WER harsh); Devanagari-aware normalisation.
-- `spikes/s3_stt_probe.py` — manifest-driven benchmark: WER, CER, RTF, verdict.
-- `spikes/s3_testset/` — recording protocol + 10 code-switched reference
-  sentences + manifest, ready for Aditya's WAVs.
+**Consequence — romanisation is NOT required.** Aero's downstream consumer is
+`gemma4:e4b`, which reads Devanagari natively. So Devanagari STT output is fine;
+the earlier "romanised output" assumption is dropped. The real (and only) blocker
+for `small` is **speed**, not accuracy.
 
-## Recommendation
+## Decision
 
-Green-light **Milestone 3 planning** with **push-to-talk first** (base model,
-RTF < 1.0 already met). Gate open-mic / model choice on Aditya's recordings.
-Don't assume text-chat throughput numbers transfer to voice — measure STT+LLM+TTS
-together under the pipeline.
+- **Milestone 3 ships push-to-talk with `small`.** PTT (transcribe after the user
+  stops) tolerates ~1.5× realtime — a ~4 s utterance → ~6 s wait with a
+  "listening…/thinking…" indicator. Good enough to build the voice loop now.
+- **Accept Devanagari transcripts** end-to-end; gemma4 handles them.
+- **Guard the catastrophic case** (one clip produced garbage at 15× RTF): add a
+  sanity check (empty/low-confidence/absurd-length → ask the user to repeat)
+  before feeding the transcript to memory.
+
+## Open item (network-blocked, not a blocker)
+
+`large-v3-turbo` (large-v3 accuracy, ~4× faster) is the likely upgrade for
+**open-mic + snappier PTT**, but its ~1.6 GB HuggingFace download failed 3×
+here on connection resets (WinError 10054), incl. with `hf_transfer`. It's cached
+partially and **resumes** — re-run when on a stable network / VPN:
+```
+HF_HUB_ENABLE_HF_TRANSFER=1 python spikes/s3_stt_probe.py --model large-v3-turbo
+```
+Fallbacks if turbo underwhelms on CPU: `distil-large-v3`, or **AI4Bharat
+IndicWhisper** (R-3 fallback, Indic-specialised, Devanagari output).
+
+## Status: S-3 COMPLETE
+
+Verdict reached on real audio. Whisper `small`, push-to-talk, Devanagari accepted.
+Green-light Milestone 3 voice loop. Revisit the model for open-mic once a
+faster-accurate model can be fetched.

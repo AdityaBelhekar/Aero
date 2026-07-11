@@ -28,3 +28,10 @@ ui/dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Personal voice recordings — never commit (biometric/personal data).
+# The recording protocol (README + manifest) is kept; the audio is not.
+/rec/
+*.m4a
+*.wav
+spikes/s3_testset/*.wav
