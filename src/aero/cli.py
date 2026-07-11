@@ -206,6 +206,44 @@ def cmd_chat(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_voices(cfg: Config, args) -> int:
+    """List Svara voice profiles and choose Aero's voice / TTS engine."""
+    from aero import settings as st
+    from aero.voice.svara_tts import (AERO_VOICE_CANDIDATES, SvaraTTS,
+                                       describe_voice, voices)
+
+    cur = st.load(cfg)
+    if args.engine:
+        cur.engine = args.engine
+        st.save(cur, cfg)
+        print(f"TTS engine set to: {cur.engine}")
+        return 0
+    if args.set:
+        if args.set not in voices():
+            print(f"Unknown voice '{args.set}'. Run `aero voices` to list them.")
+            return 1
+        cur.svara_voice = args.set
+        cur.engine = "svara"
+        st.save(cur, cfg)
+        print(f"Aero voice set to: {args.set} ({describe_voice(args.set)}); engine=svara")
+        return 0
+
+    print(f"Current: engine={cur.engine}  svara_voice={cur.svara_voice} "
+          f"({describe_voice(cur.svara_voice)})")
+    reachable = SvaraTTS(cur.svara_voice, base_url=cur.svara_base_url).health_check()
+    print(f"Svara server @ {cur.svara_base_url}: "
+          f"{'reachable' if reachable else 'NOT reachable (see docs/SVARA_SETUP.md)'}\n")
+    print("Suggested for Aero (young Indian male):", ", ".join(AERO_VOICE_CANDIDATES))
+    print("\nAll 38 Svara voices:")
+    vs = voices()
+    for i in range(0, len(vs), 2):
+        a = vs[i]
+        b = vs[i + 1] if i + 1 < len(vs) else ""
+        print(f"  {a:<14}{describe_voice(a):<22}   {b:<14}{describe_voice(b) if b else ''}")
+    print("\nSelect with:  aero voices --set hi_male")
+    return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -226,6 +264,7 @@ def cmd_voice(cfg: Config, args) -> int:
     from aero.cognition.ollama_backend import OllamaCognition
     from aero.memory.store import MemoryStore
     from aero.perception import WorldStateProvider
+    from aero import settings as st
     from aero.perception.stt import FasterWhisperBackend
     from aero.voice.loop import VoiceLoop
     from aero.voice.mic import Recorder
@@ -240,12 +279,20 @@ def cmd_voice(cfg: Config, args) -> int:
         print("faster-whisper not installed. pip install -e \".[stt]\"")
         return 1
 
+    # Selected TTS engine, with graceful fallback to SAPI if Svara isn't up.
+    tts = st.build_tts(cfg)
+    if not tts.health_check():
+        if tts.__class__.__name__ != "SapiTTS":
+            print(f"Selected voice engine unavailable ({tts.__class__.__name__}); "
+                  "using SAPI. See docs/SVARA_SETUP.md to enable the real voice.")
+        tts = SapiTTS()
+
     cfg.ensure_dirs()
     print(f"Loading STT ({args.model})... first run may download the model.")
     with _open(cfg) as v:
         store = MemoryStore(v, actor="user")
         agent = AeroAgent(store, llm, emb, world_provider=WorldStateProvider())
-        loop = VoiceLoop(agent, stt, SapiTTS(), recorder=Recorder(args.mic))
+        loop = VoiceLoop(agent, stt, tts, recorder=Recorder(args.mic))
         if args.text:
             loop.run_text(speak=not args.no_speak)
         else:
@@ -255,16 +302,16 @@ def cmd_voice(cfg: Config, args) -> int:
 
 
 def cmd_speak(cfg: Config, args) -> int:
-    """Speak text through the current TTS backend with a tone preset."""
-    from aero.voice import SapiTTS
+    """Speak text through the selected TTS backend with a tone preset."""
+    from aero import settings as st
     from aero.voice.speech_intent import SpeechIntent, render_ssml
 
-    tts = SapiTTS()
+    tts = st.build_tts(cfg)
     intent = SpeechIntent.from_tone(args.text, args.tone)
     if args.ssml:
         print(render_ssml(intent))
     if not tts.health_check():
-        print("SAPI TTS unavailable (Windows-only). Intent/SSML shown above.")
+        print(f"TTS backend ({tts.__class__.__name__}) unavailable. Intent/SSML shown above.")
         return 1
     if args.out:
         res = tts.synthesize(intent, args.out)
@@ -351,6 +398,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out", help="write WAV to this path instead of playing")
     sp.add_argument("--ssml", action="store_true", help="print the rendered SSML")
     sub.add_parser("mics", help="list microphone devices")
+    vo = sub.add_parser("voices", help="list/select Aero's Svara voice + TTS engine")
+    vo.add_argument("--set", help="choose a Svara voice profile, e.g. hi_male")
+    vo.add_argument("--engine", choices=["sapi", "svara"], help="set the TTS engine")
     vc = sub.add_parser("voice", help="full voice loop (mic -> STT -> Aero -> TTS)")
     vc.add_argument("--model", default="small", help="Whisper model or local path")
     vc.add_argument("--mic", default=None, help="mic device name (see `aero mics`)")
@@ -372,6 +422,7 @@ _HANDLERS = {
     "speak": cmd_speak,
     "mics": cmd_mics,
     "voice": cmd_voice,
+    "voices": cmd_voices,
 }
 
 
