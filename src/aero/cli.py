@@ -206,6 +206,27 @@ def cmd_chat(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_speak(cfg: Config, args) -> int:
+    """Speak text through the current TTS backend with a tone preset."""
+    from aero.voice import SapiTTS
+    from aero.voice.speech_intent import SpeechIntent, render_ssml
+
+    tts = SapiTTS()
+    intent = SpeechIntent.from_tone(args.text, args.tone)
+    if args.ssml:
+        print(render_ssml(intent))
+    if not tts.health_check():
+        print("SAPI TTS unavailable (Windows-only). Intent/SSML shown above.")
+        return 1
+    if args.out:
+        res = tts.synthesize(intent, args.out)
+        print(f"wrote {args.out}" if res.ok else f"failed: {res.error}")
+    else:
+        res = tts.speak(intent)
+        print(f"spoke ({res.seconds_compute:.2f}s)" if res.ok else f"failed: {res.error}")
+    return 0 if res.ok else 2
+
+
 def cmd_daemon(cfg: Config, args) -> int:
     """Run Aero's always-on background process (keep-warm + idle consolidation)."""
     from aero.daemon import AeroDaemon, DaemonConfig
@@ -275,6 +296,12 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--once", action="store_true", help="run a single tick and exit")
     d.add_argument("--idle", type=float, default=None,
                    help="idle seconds before consolidating (default 120)")
+    sp = sub.add_parser("speak", help="speak text via TTS (speech-intent -> SSML -> audio)")
+    sp.add_argument("text", help="text to speak")
+    sp.add_argument("--tone", default="neutral",
+                    help="amused|teasing|serious|concerned|low|excited|neutral")
+    sp.add_argument("--out", help="write WAV to this path instead of playing")
+    sp.add_argument("--ssml", action="store_true", help="print the rendered SSML")
     return p
 
 
@@ -288,6 +315,7 @@ _HANDLERS = {
     "consolidate": cmd_consolidate,
     "watch": cmd_watch,
     "daemon": cmd_daemon,
+    "speak": cmd_speak,
 }
 
 
