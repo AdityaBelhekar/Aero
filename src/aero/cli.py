@@ -206,6 +206,54 @@ def cmd_chat(cfg: Config, _args) -> int:
     return 0
 
 
+def cmd_mics(cfg: Config, _args) -> int:
+    """List microphone input devices (for `aero voice --mic`)."""
+    from aero.voice.mic import list_mics
+    mics = list_mics()
+    if not mics:
+        print("No audio input devices found (or not on Windows).")
+        return 1
+    print("Microphones:")
+    for m in mics:
+        print(f"  {m}")
+    return 0
+
+
+def cmd_voice(cfg: Config, args) -> int:
+    """Full voice loop: mic -> Whisper -> gemma4+memory -> speech-intent -> TTS."""
+    from aero.agent import AeroAgent
+    from aero.cognition.embeddings import OllamaEmbedder
+    from aero.cognition.ollama_backend import OllamaCognition
+    from aero.memory.store import MemoryStore
+    from aero.perception import WorldStateProvider
+    from aero.perception.stt import FasterWhisperBackend
+    from aero.voice.loop import VoiceLoop
+    from aero.voice.mic import Recorder
+    from aero.voice.tts import SapiTTS
+
+    llm, emb = OllamaCognition(), OllamaEmbedder()
+    if not llm.health_check() or not emb.health_check():
+        print("Need Ollama with gemma4:e4b + embeddinggemma.")
+        return 1
+    stt = FasterWhisperBackend(args.model)
+    if not stt.health_check():
+        print("faster-whisper not installed. pip install -e \".[stt]\"")
+        return 1
+
+    cfg.ensure_dirs()
+    print(f"Loading STT ({args.model})... first run may download the model.")
+    with _open(cfg) as v:
+        store = MemoryStore(v, actor="user")
+        agent = AeroAgent(store, llm, emb, world_provider=WorldStateProvider())
+        loop = VoiceLoop(agent, stt, SapiTTS(), recorder=Recorder(args.mic))
+        if args.text:
+            loop.run_text(speak=not args.no_speak)
+        else:
+            loop.run_voice()
+    print("(voice session logged. run `aero consolidate` to form memory.)")
+    return 0
+
+
 def cmd_speak(cfg: Config, args) -> int:
     """Speak text through the current TTS backend with a tone preset."""
     from aero.voice import SapiTTS
@@ -302,6 +350,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="amused|teasing|serious|concerned|low|excited|neutral")
     sp.add_argument("--out", help="write WAV to this path instead of playing")
     sp.add_argument("--ssml", action="store_true", help="print the rendered SSML")
+    sub.add_parser("mics", help="list microphone devices")
+    vc = sub.add_parser("voice", help="full voice loop (mic -> STT -> Aero -> TTS)")
+    vc.add_argument("--model", default="small", help="Whisper model or local path")
+    vc.add_argument("--mic", default=None, help="mic device name (see `aero mics`)")
+    vc.add_argument("--text", action="store_true", help="type instead of speak (no mic)")
+    vc.add_argument("--no-speak", action="store_true", help="don't voice replies (text mode)")
     return p
 
 
@@ -316,6 +370,8 @@ _HANDLERS = {
     "watch": cmd_watch,
     "daemon": cmd_daemon,
     "speak": cmd_speak,
+    "mics": cmd_mics,
+    "voice": cmd_voice,
 }
 
 

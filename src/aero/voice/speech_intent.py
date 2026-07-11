@@ -59,6 +59,27 @@ class SpeechIntent:
         return cls(text=text, **presets.get(tone, {}))
 
 
+def intent_from_text(text: str) -> "SpeechIntent":
+    """Cheap heuristic delivery from reply text (Phase-1 stopgap).
+
+    Milestone 4 will have the model emit intent fields directly; for now we infer
+    a reasonable casual delivery from punctuation/length so the voice isn't
+    monotone. Aero's baseline register is warm-casual, not neutral-flat.
+    """
+    t = text.strip()
+    intent = SpeechIntent(text=t, energy=0.55, pace=0.55)  # warm-casual baseline
+    if t.endswith("!") or any(w in t.lower() for w in ("nice", "let's go", "clean", "haha")):
+        intent.energy = 0.8
+        intent.pace = 0.65
+        intent.amusement = 0.4
+    if t.endswith("?"):
+        intent.energy = 0.62
+    if "..." in t or t.endswith(".."):
+        intent.trailing = 0.7
+        intent.pace = 0.48
+    return intent
+
+
 def _clamp(x: float, lo=0.0, hi=1.0) -> float:
     return max(lo, min(hi, x))
 
