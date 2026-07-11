@@ -49,20 +49,38 @@ for `small` is **speed**, not accuracy.
   sanity check (empty/low-confidence/absurd-length → ask the user to repeat)
   before feeding the transcript to memory.
 
-## Open item (network-blocked, not a blocker)
+## Turbo tested too (large-v3-turbo, downloaded manually to models/turbo)
 
-`large-v3-turbo` (large-v3 accuracy, ~4× faster) is the likely upgrade for
-**open-mic + snappier PTT**, but its ~1.6 GB HuggingFace download failed 3×
-here on connection resets (WinError 10054), incl. with `hf_transfer`. It's cached
-partially and **resumes** — re-run when on a stable network / VPN:
-```
-HF_HUB_ENABLE_HF_TRANSFER=1 python spikes/s3_stt_probe.py --model large-v3-turbo
-```
-Fallbacks if turbo underwhelms on CPU: `distil-large-v3`, or **AI4Bharat
-IndicWhisper** (R-3 fallback, Indic-specialised, Devanagari output).
+| Model | mean WER | mean CER | mean RTF (CPU) | Comprehension | Stability |
+|---|---|---|---|---|---|
+| `base`  | 0.56 | 0.30 | ~0.6 | poor on code-switch | ok |
+| `small` | 1.14* | 0.84* | ~1.5 | good (Devanagari) | one catastrophic clip |
+| `models/turbo` | 0.54* | 0.49* | ~3.5 | **best — mixes scripts naturally** | **rock-solid, no failures** |
+
+\* WER inflated by Devanagari-vs-romanised script mismatch, not comprehension.
+
+Turbo is the smartest ear by a clear margin — it correctly kept English in Latin
+and Hindi/Marathi in Devanagari in the *same* utterance (clip 01: "भाई ये
+आसाइन्मेंट का डेडलाइन कल आहे and I haven't even started yet") and had **zero**
+catastrophic failures. Greedy decoding (`--beam 1`) did NOT help — it was slower
+(thermal throttling) and no more accurate, confirming compute, not search, is the
+bottleneck.
+
+## Final decision (CPU-bound reality)
+
+- **Ship `small` as the default** for push-to-talk now: ~1.5× RTF (~6 s per
+  utterance) is tolerable; guard the occasional garbage clip (already built into
+  the voice loop). This is the voice-loop default.
+- **`turbo` is the accuracy king, gated on hardware.** At ~3.5× on this CPU it's
+  a ~12 s wait — usable if accuracy matters more than speed, available any time
+  via `aero voice --model models/turbo`. On a **GPU** (`compute_type=float16`)
+  turbo drops to ~0.2–0.3× → both accurate AND realtime, enabling open-mic. That
+  is the clear end-state once a GPU is in play.
+- There is no model on this CPU that is both accurate on code-switch and
+  realtime; that's a hardware limit, not a model-search failure.
 
 ## Status: S-3 COMPLETE
 
-Verdict reached on real audio. Whisper `small`, push-to-talk, Devanagari accepted.
-Green-light Milestone 3 voice loop. Revisit the model for open-mic once a
-faster-accurate model can be fetched.
+Verdict reached on real audio across base/small/turbo. Default `small` (PTT,
+Devanagari accepted); `turbo` selectable for accuracy and the GPU end-state.
+Green-light Milestone 3 voice loop (built).

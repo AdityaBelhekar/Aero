@@ -62,11 +62,13 @@ class FasterWhisperBackend(STTService):
         device: str = "cpu",
         compute_type: str = "int8",   # int8 keeps CPU RAM/latency sane
         download_root: str | None = None,
+        beam_size: int = 5,           # 1 = greedy: ~2x faster, slightly less accurate
     ):
         self.model_name = model_name
         self.device = device
         self.compute_type = compute_type
         self.download_root = download_root
+        self.beam_size = beam_size
         self._model = None
 
     def _ensure_model(self):
@@ -90,7 +92,7 @@ class FasterWhisperBackend(STTService):
             audio_path,
             language=language,
             vad_filter=True,           # drop silence: faster + cleaner
-            beam_size=5,
+            beam_size=self.beam_size,
         )
         seg_list = []
         texts = []

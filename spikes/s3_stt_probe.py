@@ -50,8 +50,8 @@ def load_manifest(testset: Path) -> list[tuple[Path, str]]:
     return pairs
 
 
-def run(model_name: str, pairs: list[tuple[Path, str]]) -> int:
-    stt = FasterWhisperBackend(model_name)
+def run(model_name: str, pairs: list[tuple[Path, str]], beam: int = 5) -> int:
+    stt = FasterWhisperBackend(model_name, beam_size=beam)
     if not stt.health_check():
         print("faster-whisper not installed. pip install faster-whisper")
         return 1
@@ -82,10 +82,11 @@ def run(model_name: str, pairs: list[tuple[Path, str]]) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="small")
+    ap.add_argument("--beam", type=int, default=5, help="beam size (1 = greedy, faster)")
     ap.add_argument("--testset", default=str(Path(__file__).parent / "s3_testset"))
     args = ap.parse_args()
     pairs = load_manifest(Path(args.testset))
-    return run(args.model, pairs)
+    return run(args.model, pairs, beam=args.beam)
 
 
 if __name__ == "__main__":
