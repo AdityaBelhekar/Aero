@@ -17,6 +17,7 @@ crypto = ["sqlcipher3-binary>=0.5.0"]
 # Later milestones (kept out of the base install so M1 stays lean).
 llm = ["llama-cpp-python>=0.3.0"]
 embed = ["sentence-transformers>=3.0.0", "sqlite-vec>=0.1.0"]
+stt = ["faster-whisper>=1.0.0"]  # spike S-3 / Milestone 3 (voice)
 dev = ["pytest>=8.0", "ruff>=0.6.0"]
 
 [project.scripts]
