@@ -46,6 +46,13 @@ class RetrievalConfig:
     wild: bool = False               # Wild Recall mode
 
 
+# Light retrieval for reflex turns (basic banter): keep the vector anchor so an
+# obviously-relevant memory can still surface, but skip the expensive graph
+# spread + rerank breadth. Memory is never absent — core identity is always in
+# the prompt (working_set) and this still recalls the top hits cheaply.
+LIGHT_CONFIG = RetrievalConfig(anchor_k=6, spread_hops=0, limit=3)
+
+
 def _parse_ts(ts: str | None) -> datetime | None:
     if not ts:
         return None
@@ -72,8 +79,8 @@ class RetrievalPipeline:
         self.embedder = embedder
         self.cfg = config or RetrievalConfig()
 
-    def retrieve(self, ctx: RetrievalContext) -> list[Retrieved]:
-        cfg = self.cfg
+    def retrieve(self, ctx: RetrievalContext, cfg: RetrievalConfig | None = None) -> list[Retrieved]:
+        cfg = cfg or self.cfg
         now = ctx.now or datetime.now(timezone.utc)
 
         # 1) ANCHOR — vector similarity over embedded memories.

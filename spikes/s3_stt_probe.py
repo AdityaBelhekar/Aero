@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from aero.eval.wer import cer, wer  # noqa: E402
+from aero.perception.indic_stt import IndicConformerSTT  # noqa: E402
 from aero.perception.stt import FasterWhisperBackend  # noqa: E402
 
 # Realtime-factor bar for live voice; accuracy bars are judged with real audio.
@@ -50,12 +51,23 @@ def load_manifest(testset: Path) -> list[tuple[Path, str]]:
     return pairs
 
 
-def run(model_name: str, pairs: list[tuple[Path, str]], beam: int = 5) -> int:
-    stt = FasterWhisperBackend(model_name, beam_size=beam)
-    if not stt.health_check():
-        print("faster-whisper not installed. pip install faster-whisper")
-        return 1
-    print(f"STT model: {model_name} ({stt.compute_type}, {stt.device})\n")
+def run(model_name: str, pairs: list[tuple[Path, str]], beam: int = 5,
+        backend: str = "whisper", decoder: str = "ctc") -> int:
+    if backend == "indic":
+        kw = {"decoder": decoder}
+        if model_name and model_name != "small":  # allow a local .nemo path/repo id
+            kw["model_name"] = model_name
+        stt = IndicConformerSTT(**kw)
+        if not stt.health_check():
+            print("NeMo not installed. See docs/AI4BHARAT_SETUP.md")
+            return 1
+        print(f"STT: IndicConformer ({decoder} decoder, {stt.device})\n")
+    else:
+        stt = FasterWhisperBackend(model_name, beam_size=beam)
+        if not stt.health_check():
+            print("faster-whisper not installed. pip install faster-whisper")
+            return 1
+        print(f"STT model: {model_name} ({stt.compute_type}, {stt.device})\n")
 
     wers, cers, rtfs = [], [], []
     for audio, ref in pairs:
@@ -82,11 +94,16 @@ def run(model_name: str, pairs: list[tuple[Path, str]], beam: int = 5) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="small")
+    ap.add_argument("--backend", default="whisper", choices=["whisper", "indic"],
+                    help="whisper (faster-whisper) or indic (AI4Bharat IndicConformer)")
+    ap.add_argument("--decoder", default="ctc", choices=["ctc", "rnnt"],
+                    help="IndicConformer head: ctc (fast) or rnnt (accurate)")
     ap.add_argument("--beam", type=int, default=5, help="beam size (1 = greedy, faster)")
     ap.add_argument("--testset", default=str(Path(__file__).parent / "s3_testset"))
     args = ap.parse_args()
     pairs = load_manifest(Path(args.testset))
-    return run(args.model, pairs, beam=args.beam)
+    return run(args.model, pairs, beam=args.beam,
+               backend=args.backend, decoder=args.decoder)
 
 
 if __name__ == "__main__":

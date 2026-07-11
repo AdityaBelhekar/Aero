@@ -159,19 +159,34 @@ def cmd_consolidate(cfg: Config, _args) -> int:
     return 0
 
 
-def cmd_chat(cfg: Config, _args) -> int:
-    """Interactive memory-in-the-loop chat with Aero (Milestone 2)."""
-    from datetime import datetime
+def _build_brain(cfg: Config, *, force: str | None = None):
+    """Build the selected cognition backend, falling back to local gemma4 if a
+    chosen cloud brain is unreachable/keyless. Returns (llm, note-or-None)."""
+    from aero import settings as st
+    from aero.cognition.ollama_backend import OllamaCognition
 
+    llm = st.build_brain(cfg, force=force)
+    if llm.__class__.__name__ == "CloudCognition" and not llm.health_check():
+        note = ("Cloud brain unreachable (no API key or offline) — using local "
+                "gemma4. Set a key: `setx AERO_BRAIN_API_KEY <key>` and see "
+                "docs/CLOUD_BRAIN_SETUP.md.")
+        return OllamaCognition(), note
+    return llm, None
+
+
+def cmd_chat(cfg: Config, args) -> int:
+    """Interactive memory-in-the-loop chat with Aero (Milestone 2)."""
     from aero.agent import AeroAgent
     from aero.cognition.embeddings import OllamaEmbedder
-    from aero.cognition.ollama_backend import OllamaCognition
     from aero.memory.store import MemoryStore
     from aero.perception import WorldStateProvider
 
-    llm, emb = OllamaCognition(), OllamaEmbedder()
+    llm, note = _build_brain(cfg, force=getattr(args, "brain", None))
+    if note:
+        print(note)
+    emb = OllamaEmbedder()
     if not llm.health_check():
-        print("gemma4:e4b not available. Start Ollama / pull the model.")
+        print("Brain not available. For local: start Ollama / pull gemma4:e4b.")
         return 1
     if not emb.health_check():
         print("embeddinggemma not available. Run: ollama pull embeddinggemma")
@@ -219,6 +234,13 @@ def cmd_voices(cfg: Config, args) -> int:
         print(f"TTS engine set to: {cur.engine}")
         return 0
     if args.set:
+        from aero.voice.kokoro_tts import KOKORO_VOICES
+        if args.set in KOKORO_VOICES:      # a Kokoro voice -> switch to kokoro
+            cur.kokoro_voice = args.set
+            cur.engine = "kokoro"
+            st.save(cur, cfg)
+            print(f"Aero voice set to: {args.set} (Kokoro); engine=kokoro")
+            return 0
         if args.set not in voices():
             print(f"Unknown voice '{args.set}'. Run `aero voices` to list them.")
             return 1
@@ -233,7 +255,12 @@ def cmd_voices(cfg: Config, args) -> int:
     reachable = SvaraTTS(cur.svara_voice, base_url=cur.svara_base_url).health_check()
     print(f"Svara server @ {cur.svara_base_url}: "
           f"{'reachable' if reachable else 'NOT reachable (see docs/SVARA_SETUP.md)'}\n")
-    print("Suggested for Aero (young Indian male):", ", ".join(AERO_VOICE_CANDIDATES))
+    from aero.voice.kokoro_tts import KOKORO_VOICES
+    print("\nKokoro voices (fast natural English, CPU — see docs/KOKORO_SETUP.md):")
+    print("  " + ", ".join(KOKORO_VOICES))
+    print("  select e.g.:  aero voices --set am_michael   (switches engine=kokoro)")
+
+    print("\nSuggested for Aero (young Indian male):", ", ".join(AERO_VOICE_CANDIDATES))
     print("\nAll 38 Svara voices:")
     vs = voices()
     for i in range(0, len(vs), 2):
@@ -241,6 +268,40 @@ def cmd_voices(cfg: Config, args) -> int:
         b = vs[i + 1] if i + 1 < len(vs) else ""
         print(f"  {a:<14}{describe_voice(a):<22}   {b:<14}{describe_voice(b) if b else ''}")
     print("\nSelect with:  aero voices --set hi_male")
+    return 0
+
+
+def cmd_brain(cfg: Config, args) -> int:
+    """Show or switch Aero's brain: local gemma4 (private) or a cloud boost."""
+    from aero import settings as st
+    from aero.cognition.cloud_backend import (API_KEY_ENVS, PROVIDERS,
+                                              resolve_api_key)
+
+    cur = st.load(cfg)
+    if args.set:
+        cur.brain = args.set
+        if args.provider:
+            cur.cloud_provider = args.provider
+        if args.model:
+            cur.cloud_model = args.model
+        st.save(cur, cfg)
+        print(f"Brain set to: {cur.brain}"
+              + (f" ({cur.cloud_provider}:{cur.cloud_model})" if cur.brain == "cloud" else ""))
+        if cur.brain == "cloud" and not resolve_api_key():
+            print("  ! No API key found. Set one, e.g.: setx AERO_BRAIN_API_KEY <key>")
+        return 0
+
+    print(f"Current brain: {cur.brain}")
+    print(f"  local : gemma4:e4b via Ollama (private, ~5-11s/turn on CPU)")
+    print(f"  cloud : {cur.cloud_provider} / {cur.cloud_model} "
+          f"(real-time; prompt+memory context leaves the device)")
+    key = resolve_api_key()
+    print(f"\nCloud API key: {'found' if key else 'NOT set'} "
+          f"(env: {', '.join(API_KEY_ENVS)})")
+    print(f"Providers: {', '.join(PROVIDERS)}  (or a full base URL)")
+    print("\nSwitch:  aero brain --set cloud   |   aero brain --set local")
+    print("Configure cloud:  aero brain --set cloud --provider groq "
+          "--model llama-3.3-70b-versatile")
     return 0
 
 
@@ -261,22 +322,30 @@ def cmd_voice(cfg: Config, args) -> int:
     """Full voice loop: mic -> Whisper -> gemma4+memory -> speech-intent -> TTS."""
     from aero.agent import AeroAgent
     from aero.cognition.embeddings import OllamaEmbedder
-    from aero.cognition.ollama_backend import OllamaCognition
     from aero.memory.store import MemoryStore
     from aero.perception import WorldStateProvider
     from aero import settings as st
-    from aero.perception.stt import FasterWhisperBackend
     from aero.voice.loop import VoiceLoop
     from aero.voice.mic import Recorder
     from aero.voice.tts import SapiTTS
 
-    llm, emb = OllamaCognition(), OllamaEmbedder()
+    llm, note = _build_brain(cfg, force=getattr(args, "brain", None))
+    if note:
+        print(note)
+    emb = OllamaEmbedder()
     if not llm.health_check() or not emb.health_check():
-        print("Need Ollama with gemma4:e4b + embeddinggemma.")
+        print("Need a reachable brain + embeddinggemma (Ollama for local).")
         return 1
-    stt = FasterWhisperBackend(args.model)
+    stt = st.build_stt(cfg, model=args.model)
     if not stt.health_check():
-        print("faster-whisper not installed. pip install -e \".[stt]\"")
+        if args.model == "indic":
+            print("NeMo not installed. See docs/AI4BHARAT_SETUP.md "
+                  "(pip install -e \".[indic_stt]\").")
+        elif str(args.model).startswith("moonshine"):
+            print("moonshine-onnx not installed. See docs/MOONSHINE_SETUP.md "
+                  "(pip install -e \".[moonshine]\").")
+        else:
+            print("faster-whisper not installed. pip install -e \".[stt]\"")
         return 1
 
     # Selected TTS engine, with graceful fallback to SAPI if Svara isn't up.
@@ -292,11 +361,16 @@ def cmd_voice(cfg: Config, args) -> int:
     with _open(cfg) as v:
         store = MemoryStore(v, actor="user")
         agent = AeroAgent(store, llm, emb, world_provider=WorldStateProvider())
-        loop = VoiceLoop(agent, stt, tts, recorder=Recorder(args.mic))
-        if args.text:
-            loop.run_text(speak=not args.no_speak)
+        if getattr(args, "realtime", False):
+            from aero.voice.mic_stream import MicStream
+            from aero.voice.realtime import RealtimeLoop
+            RealtimeLoop(agent, stt, tts, mic=MicStream(device=args.mic)).run()
         else:
-            loop.run_voice()
+            loop = VoiceLoop(agent, stt, tts, recorder=Recorder(args.mic))
+            if args.text:
+                loop.run_text(speak=not args.no_speak)
+            else:
+                loop.run_voice()
     print("(voice session logged. run `aero consolidate` to form memory.)")
     return 0
 
@@ -382,7 +456,9 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("restore", help="restore newest (or named) snapshot")
     r.add_argument("snapshot", nargs="?", help="path to a .aero-backup file")
     sub.add_parser("smoke", help="run the Milestone-1 acceptance smoke test")
-    sub.add_parser("chat", help="interactive memory-in-the-loop chat (Milestone 2)")
+    ch = sub.add_parser("chat", help="interactive memory-in-the-loop chat (Milestone 2)")
+    ch.add_argument("--brain", choices=["local", "cloud"],
+                    help="override brain for this session (default: persisted setting)")
     sub.add_parser("consolidate", help="turn logged raw events into durable memory")
     w = sub.add_parser("watch", help="print live Tier-0 world state (perception check)")
     w.add_argument("--interval", type=float, default=1.0, help="seconds between samples")
@@ -400,12 +476,23 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("mics", help="list microphone devices")
     vo = sub.add_parser("voices", help="list/select Aero's Svara voice + TTS engine")
     vo.add_argument("--set", help="choose a Svara voice profile, e.g. hi_male")
-    vo.add_argument("--engine", choices=["sapi", "svara"], help="set the TTS engine")
+    vo.add_argument("--engine", choices=["sapi", "svara", "parler", "kokoro"],
+                    help="set the TTS engine")
     vc = sub.add_parser("voice", help="full voice loop (mic -> STT -> Aero -> TTS)")
-    vc.add_argument("--model", default="small", help="Whisper model or local path")
+    vc.add_argument("--model", default="small",
+                    help="STT: Whisper size ('small'...), 'moonshine[/tiny|/base]' "
+                         "(fast English), or 'indic' (IndicConformer)")
     vc.add_argument("--mic", default=None, help="mic device name (see `aero mics`)")
     vc.add_argument("--text", action="store_true", help="type instead of speak (no mic)")
     vc.add_argument("--no-speak", action="store_true", help="don't voice replies (text mode)")
+    vc.add_argument("--realtime", action="store_true",
+                    help="hands-free real-time loop (VAD turn-taking + barge-in; no button)")
+    vc.add_argument("--brain", choices=["local", "cloud"],
+                    help="override brain for this session (default: persisted setting)")
+    br = sub.add_parser("brain", help="show/switch Aero's brain (local gemma4 | cloud boost)")
+    br.add_argument("--set", choices=["local", "cloud"], help="select the brain tier")
+    br.add_argument("--provider", help="cloud provider alias (groq/openai/...) or base URL")
+    br.add_argument("--model", help="cloud model id, e.g. llama-3.3-70b-versatile")
     return p
 
 
@@ -423,6 +510,7 @@ _HANDLERS = {
     "mics": cmd_mics,
     "voice": cmd_voice,
     "voices": cmd_voices,
+    "brain": cmd_brain,
 }
 
 

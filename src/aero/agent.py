@@ -18,6 +18,7 @@ import uuid
 
 from aero.cognition.embeddings import EmbeddingService
 from aero.cognition.service import CognitionService
+from aero.effort import classify
 from aero.memory.retrieval import RetrievalContext, RetrievalPipeline
 from aero.memory.store import MemoryStore
 from aero.vault.connection import now_iso
@@ -43,6 +44,7 @@ class AeroAgent:
         # refreshed from live Tier-0 signals each turn.
         self.world_provider = world_provider
         self.conversation: list[Turn] = []
+        self.last_effort = None   # set per turn by respond() (see effort.classify)
 
     def _refresh_world(self) -> None:
         if self.world_provider is None:
@@ -72,12 +74,25 @@ class AeroAgent:
         self._log_event("Aditya", user_text)
         self.conversation.append(Turn("user", user_text))
 
-        # Retrieve against the user's message plus a little recent context.
-        recent = " ".join(t.content for t in self.conversation[-3:])
-        recalled = self.pipeline.retrieve(RetrievalContext(recent, private_ok=True))
+        # Two speeds, one brain. Core identity is ALWAYS in the prompt
+        # (working_set) — memory is never absent. What differs is the *search*:
+        #   deep  -> full hybrid retrieval (vector anchor -> graph spread -> rerank)
+        #   reflex-> NO retrieval at all. This isn't just to skip graph work: the
+        #     embedding call runs embeddinggemma, which on a 16 GB box evicts the
+        #     9.6 GB gemma4 and forces a costly reload every turn (~10 s). Skipping
+        #     it for banter keeps gemma4 resident -> reflex ≈ the model's floor.
+        # For situational-but-not-deep turns, LIGHT_CONFIG stays available as a
+        # cheap vector-only recall (see retrieval.LIGHT_CONFIG).
+        self.last_effort = classify(user_text)
+        if self.last_effort.use_deep_memory:
+            recent = " ".join(t.content for t in self.conversation[-3:])
+            recalled = self.pipeline.retrieve(RetrievalContext(recent, private_ok=True))
+        else:
+            recalled = []  # core identity carries the reflex turn; no embed/reload
 
         messages = assemble(self.store, recalled, self.conversation, world=self.world)
-        result = self.llm.chat(messages, temperature=0.8, max_tokens=300)
+        result = self.llm.chat(messages, temperature=0.8,
+                               max_tokens=self.last_effort.max_tokens)
         reply = result.text.strip()
 
         self.conversation.append(Turn("assistant", reply))

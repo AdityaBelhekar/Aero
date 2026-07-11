@@ -18,6 +18,20 @@ crypto = ["sqlcipher3-binary>=0.5.0"]
 llm = ["llama-cpp-python>=0.3.0"]
 embed = ["sentence-transformers>=3.0.0", "sqlite-vec>=0.1.0"]
 stt = ["faster-whisper>=1.0.0"]  # spike S-3 / Milestone 3 (voice)
+# AI4Bharat Indic backends (English + Marathi scope). Heavy + CPU-slow; kept
+# optional. NeMo is best installed from AI4Bharat's fork — see docs/AI4BHARAT_SETUP.md.
+indic_stt = ["nemo_toolkit[asr]>=1.23.0"]                       # IndicConformer STT
+parler = ["parler-tts", "transformers>=4.43.0", "soundfile>=0.12.0"]  # Indic Parler-TTS
+# Kokoro-82M — fast natural English voice, CPU-friendly (ONNX). onnxruntime-directml
+# (Windows) additionally lets it use an integrated GPU. See docs/KOKORO_SETUP.md.
+kokoro = ["kokoro-onnx>=0.4.0", "soundfile>=0.12.0"]
+# Moonshine — fast English STT, pure ONNX (no torch), low-latency on CPU.
+# Distribution is 'useful-moonshine-onnx'; it provides `import moonshine_onnx`.
+moonshine = ["useful-moonshine-onnx"]
+# Real-time hands-free loop: live mic (sounddevice) + optional neural VAD (Silero).
+# The default EnergyVAD needs neither; sounddevice is required for the live mic.
+realtime = ["sounddevice>=0.4.6"]
+realtime_silero = ["sounddevice>=0.4.6", "silero-vad", "numpy"]
 dev = ["pytest>=8.0", "ruff>=0.6.0"]
 
 [project.scripts]

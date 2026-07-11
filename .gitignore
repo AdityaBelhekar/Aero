@@ -35,3 +35,5 @@ Thumbs.db
 *.m4a
 *.wav
 spikes/s3_testset/*.wav
+.venv-nemo/
+.venv-litellm/

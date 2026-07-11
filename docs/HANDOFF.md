@@ -40,6 +40,52 @@ done; Milestone 3 (voice) mostly done.
 - `src/aero/daemon.py` — always-on daemon: keep models warm + idle consolidation. CLI `aero daemon`.
 - **Proven:** preference told in session 1 survives consolidation + restart and resurfaces in session 2 with provenance.
 
+**Two-speed brain + cloud option (added after the AI4Bharat spike):**
+- `src/aero/effort.py` — `classify()` routes each turn `reflex` (banter/acks/commands)
+  vs `deep` (memory-reaching/substantive). Memory-first: core identity is ALWAYS in
+  the prompt; reflex skips only the expensive retrieval (and the embeddinggemma call,
+  which was evicting gemma4 and forcing ~10s reloads). Measured: reflex ~2x faster.
+- **The real latency wall is gemma4:e4b itself on CPU: ~5-11s/turn (prefill is
+  free; it's the 9.6 GB model). No prompt trick fixes it — needs a smaller model or
+  GPU, OR the cloud brain below.**
+- `src/aero/cognition/cloud_backend.py` — `CloudCognition`, an OpenAI-compatible
+  online brain (Groq/OpenAI/OpenRouter/Gemini) for real-time replies. Local gemma4
+  stays the private default; cloud is opt-in via `aero brain --set cloud` (key from
+  env, never persisted). Memory stays 100% local — only generation goes online.
+  `settings.build_brain()` picks it. See `docs/CLOUD_BRAIN_SETUP.md`.
+
+**Real-time hands-free loop (DONE + proven) — the no-button conversation:**
+- `src/aero/voice/vad.py` — `VAD` iface, `EnergyVAD` (dep-free default), optional
+  `SileroVAD`, and `VADSegmenter` (pure endpointing state machine — unit-tested).
+- `src/aero/voice/mic_stream.py` — `MicStream` (sounddevice, optional) + pcm->wav.
+- `src/aero/voice/realtime.py` — `RealtimeLoop`: mic -> VAD endpointing -> STT ->
+  agent(+memory, two-speed) -> Kokoro, with **barge-in** (interruptible winsound
+  playback). `handle_utterance` is the testable core. CLI: `aero voice --realtime`.
+- Proven end-to-end on real audio: VAD auto-segmented one turn, Moonshine
+  transcribed a synthesized English line **verbatim**, hands-free. Extras:
+  `.[realtime]` (sounddevice) / `.[realtime_silero]`. See docs/REALTIME_SETUP.md.
+- Tuning lives in `SegmenterConfig` (start_ms/end_silence_ms/preroll_ms) +
+  `EnergyVAD.threshold`/`calibrate`; barge-in via `RealtimeLoop(barge_in_ms=...)`.
+
+**English ear — Moonshine (fast English STT, DONE + proven):**
+- `src/aero/perception/moonshine_stt.py` — `MoonshineSTT(STTService)` via
+  `useful-moonshine-onnx` (import `moonshine_onnx`; pure ONNX, no torch). Models
+  `moonshine/tiny` (26M) | `moonshine/base` (58M, default). Selected via
+  `aero voice --model moonshine[/tiny]`; factory in `indic_stt.build_stt`.
+  **Proven: clean English → near-verbatim** (Kokoro→Moonshine round-trip returned
+  sentences word-for-word). Garbles Marathi by design (English-only — that's the
+  point of the English pivot). RTF ~realtime on `base` (faster offline / on tiny).
+  PyPI dist is `useful-moonshine-onnx`, NOT `moonshine-onnx`. See docs/MOONSHINE_SETUP.md.
+
+**English voice — Kokoro (the CPU-fast real voice, DONE + proven):**
+- `src/aero/voice/kokoro_tts.py` — `KokoroTTS(TTSService)` via `kokoro-onnx`.
+  **Measured warm RTF ~0.62-0.77x on this CPU** (faster than realtime; first call
+  ~5s incl. load). Real 24 kHz speech proven end-to-end. This is the answer to the
+  Parler-277x dead end. Model files (~336 MB) in `models/kokoro/` (gitignored),
+  downloaded from the kokoro-onnx v1.0 release. `engine=kokoro`, voices like
+  `am_michael`/`bm_george` via `aero voices --set am_michael`. ONNX → can use the
+  iGPU via onnxruntime-directml. See `docs/KOKORO_SETUP.md`.
+
 **Voice (Milestone 3, current state):**
 - `src/aero/perception/stt.py` — `STTService` interface + `FasterWhisperBackend` (Whisper `small` default, configurable beam). **This is the STT interface to implement against.**
 - `src/aero/voice/speech_intent.py` — `SpeechIntent` (delivery: energy/pace/pauses/etc.) + SSML renderer + `intent_from_text()`.
@@ -97,6 +143,32 @@ Run `aero voice`, talk, judge quality + latency. If Parler is too slow on CPU
 
 ## KEY GOTCHAS / LESSONS (save yourself the pain)
 
+- **Indic Parler-TTS backend PROVEN working but GPU-only (measured 2026-07-11).**
+  `ParlerTTS` synthesizes real 44.1 kHz mono speech end-to-end (verified
+  non-silent, intent→voice-description mapping works), but on this CPU it took
+  **1162 s for a 4.2 s line — RTF ≈ 277x** (~19 min/sentence). Unusable live.
+  Pulls flan-t5-large + dac_44khz alongside the 0.9B model. **Verdict: keep SAPI/
+  the CPU-fast path; use Parler only on a GPU.** CPU-friendly Aero voice fallback
+  = AI4Bharat VITS (`vits_rasa_13`). Backend + `engine=parler` wiring stay ready.
+- **IndicConformer STT needs the AI4Bharat NeMo FORK — upstream PyPI NeMo can't
+  load it (proven 2026-07-11).** The `.nemo` (downloaded OK to `models/indicconformer_mr/`)
+  uses a `multilingual` tokenizer + `multisoftmax` RNNT decoder, both fork-only.
+  With `nemo_toolkit==2.7.3` it dies on `KeyError: 'dir'`, then (after an
+  agg-tokenizer config patch) on `RNNTDecoder ... unexpected kwarg 'multisoftmax'`.
+  The fork's `bash reinstall.sh` is Linux-only (pynini) → doesn't build on this
+  Windows box. **Verdict: STT stays Whisper `small` on this box;** run
+  IndicConformer under WSL2 / Linux / GPU, or use the Sarvam API tier. The
+  `IndicConformerSTT` backend, resilient downloader, and `--backend indic` probe
+  are all wired and ready for such a box. TTS (Parler) is unaffected — it's a
+  plain transformers model, downloadable and pip-installable (not gated for DL).
+- **AI4Bharat models are GATED** — `indicconformer_stt_mr_hybrid_ctc_rnnt_large`,
+  `indic-parler-tts` (and the umbrella `indicconformer`) are `gated=auto`. You must
+  click "Agree and access repository" on each HF model page (logged in as the
+  cached-token account, `ItsxxAdityaa`) before weights download. Auto-grant is
+  instant, but until accepted the `.nemo`/weights 403 with `GatedRepoError ... not
+  in the authorized list` — this is terms-not-accepted, NOT the network. `model_info`
+  still returns metadata even when unaccepted, so gating check ≠ download works.
+  See `docs/AI4BHARAT_SETUP.md`.
 - **Downloads keep failing on this network** — HuggingFace resets connections (`WinError 10054 / ECONNRESET`) on large pulls. Turbo (1.6 GB) failed 3× incl. with `hf_transfer`. **Mitigations:** small models download fine; for big ones use `huggingface-cli download <repo> --local-dir models/<name>` and **re-run to resume**, or download in a browser/download-manager, or a VPN. `models/` is gitignored. Ollama registry stalled similarly once — same network issue, not the tools.
 - **CPU-only, no GPU.** Every heavy model is slow: turbo STT ~3.5× RTF, Parler/Svara TTS will be seconds-per-sentence. VITS and small models are the CPU-friendly ones. This is a hardware ceiling; a GPU changes everything (turbo → ~0.2× etc.).
 - **gemma4:e4b is a reasoning model** — always run with thinking OFF (already handled in `OllamaCognition`; keep it that way). Cold model load ~40s; the daemon keeps it warm.
