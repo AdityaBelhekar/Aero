@@ -32,6 +32,10 @@ moonshine = ["useful-moonshine-onnx"]
 # The default EnergyVAD needs neither; sounddevice is required for the live mic.
 realtime = ["sounddevice>=0.4.6"]
 realtime_silero = ["sounddevice>=0.4.6", "silero-vad", "numpy"]
+# Secure API-key storage for cloud brains (AERO-BRAIN-304). Optional: without it
+# Aero falls back to environment variables. On Linux, keyring uses the Secret
+# Service (GNOME Keyring / KWallet); see docs/OPEN_BRAIN_SETUP.md.
+keyring = ["keyring>=24.0"]
 dev = ["pytest>=8.0", "ruff>=0.6.0"]
 
 [project.scripts]
