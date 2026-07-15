@@ -20,6 +20,9 @@ class VoiceSettings:
     svara_base_url: str = "http://localhost:8080/v1"
     kokoro_voice: str = "am_michael"  # Kokoro voice (fast natural English)
     stt_model: str = "small"      # Whisper size ("small"...) or "indic" (IndicConformer)
+    # User-defined/overridden voice engine profiles, overlaid on the built-in
+    # catalog (voice.catalog.registry). Maps engine id -> partial VoiceProfile.
+    voice_engines: dict = field(default_factory=dict)
     # Brain tier: 'local' (gemma4:e4b, private, ~5-11s/turn on CPU) or 'cloud'
     # (OpenAI-compatible online brain, sub-second — but the prompt leaves the
     # device). Local is the privacy-first default. API key comes from the
@@ -134,29 +137,55 @@ def permission_granted(s: VoiceSettings, scope: str) -> bool:
     return bool((s.permissions or {}).get(scope, False))
 
 
-def build_tts(cfg: Config | None = None):
-    """Construct the TTS backend the user has selected."""
+def _construct_tts(backend: str, s: VoiceSettings):
+    """Build a TTS engine from its catalog ``backend`` key. Imports are lazy so
+    the base install stays dependency-free."""
     from aero.voice.tts import SapiTTS
-
-    s = load(cfg)
-    if s.engine == "svara":
+    if backend == "svara":
         from aero.voice.svara_tts import SvaraTTS
         return SvaraTTS(s.svara_voice, base_url=s.svara_base_url)
-    if s.engine == "parler":
+    if backend == "parler":
         from aero.voice.parler_tts import ParlerTTS
         return ParlerTTS()
-    if s.engine == "kokoro":
+    if backend == "kokoro":
         from aero.voice.kokoro_tts import KokoroTTS
         return KokoroTTS(s.kokoro_voice)
     return SapiTTS()
 
 
+def build_tts(cfg: Config | None = None):
+    """Construct the TTS engine the user selected, resolved through the voice
+    catalog (M11): ``s.engine`` is a catalog id -> its backend -> the engine.
+    Unknown ids fall through to the id-as-backend (back-compat)."""
+    from aero.voice.catalog import registry as _vreg
+    s = load(cfg)
+    prof = _vreg(s.voice_engines).get(s.engine)
+    backend = prof.backend if prof else s.engine
+    return _construct_tts(backend, s)
+
+
+def build_tts_with_fallback(cfg: Config | None = None):
+    """TTS wrapped so a dead cloud/local engine degrades to SAPI (AERO-VOX-404).
+    The voice loop uses this; the bare ``build_tts`` stays exact for callers that
+    want a specific engine."""
+    from aero.voice.fallback import FallbackTTS
+    from aero.voice.tts import SapiTTS
+    primary = build_tts(cfg)
+    if isinstance(primary, SapiTTS):
+        return primary  # already the local backstop; nothing to fall back to
+    return FallbackTTS(primary, SapiTTS())
+
+
 def build_stt(cfg: Config | None = None, *, model: str | None = None):
     """Construct the selected STT backend. ``model`` overrides the persisted
-    choice (used by `aero voice --model ...`)."""
+    choice (used by `aero voice --model ...`). A catalog id resolves to its
+    backend; anything else (a whisper size / model id) passes straight through."""
     from aero.perception.indic_stt import build_stt as _build
+    from aero.voice.catalog import registry as _vreg
     s = load(cfg)
-    return _build(model or s.stt_model)
+    choice = model or s.stt_model
+    prof = _vreg(s.voice_engines).get(choice)
+    return _build(prof.backend if prof else choice)
 
 
 def resolve_brain_profile(s: VoiceSettings, which: str | None = None):

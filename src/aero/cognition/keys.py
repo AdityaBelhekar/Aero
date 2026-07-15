@@ -98,3 +98,51 @@ def delete_key(profile_id: str) -> bool:
         return True
     except Exception:
         return False
+
+
+# -- voice-engine keys (M11, AERO-VOX-404) ---------------------------------
+# Cloud STT/TTS engines (ElevenLabs, Sarvam, Deepgram…) get the same treatment
+# as brains, filed under a separate keyring service so the namespaces never
+# collide. Same rules: keyring first, then the profile's key_env; local engines
+# are keyless. Duck-typed on the profile (id/key_env/local) to avoid importing
+# the voice catalog here.
+VOICE_SERVICE = "aero-voice"
+
+
+def resolve_voice_key(profile) -> str | None:
+    """API key for a voice engine profile, or None. Local engines are keyless."""
+    if getattr(profile, "local", False) and profile.key_env is None:
+        return None
+    kr = _keyring()
+    if kr is not None:
+        try:
+            val = kr.get_password(VOICE_SERVICE, profile.id)
+            if val:
+                return val
+        except Exception:
+            pass
+    if profile.key_env:
+        return os.environ.get(profile.key_env) or None
+    return None
+
+
+def set_voice_key(profile_id: str, key: str) -> bool:
+    kr = _keyring()
+    if kr is None:
+        return False
+    try:
+        kr.set_password(VOICE_SERVICE, profile_id, key)
+        return True
+    except Exception:
+        return False
+
+
+def delete_voice_key(profile_id: str) -> bool:
+    kr = _keyring()
+    if kr is None:
+        return False
+    try:
+        kr.delete_password(VOICE_SERVICE, profile_id)
+        return True
+    except Exception:
+        return False
