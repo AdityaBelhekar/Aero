@@ -17,13 +17,21 @@ state machine, emotion map, and ambient scheduler are pure logic over a
 ``RigManifest`` that ships with a placeholder default.
 """
 
+from aero.presence.ambient import AmbientScheduler
+from aero.presence.driver import PresenceDriver
+from aero.presence.emotion import emotion_from_intent
 from aero.presence.rig import RigManifest, default_manifest
 from aero.presence.state import AnimationState, AvatarState, Emotion
+from aero.presence.state_machine import AvatarStateMachine
 
 __all__ = [
+    "AmbientScheduler",
     "AnimationState",
     "AvatarState",
+    "AvatarStateMachine",
     "Emotion",
+    "PresenceDriver",
     "RigManifest",
     "default_manifest",
+    "emotion_from_intent",
 ]
