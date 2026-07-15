@@ -160,16 +160,20 @@ def cmd_consolidate(cfg: Config, _args) -> int:
 
 
 def _build_brain(cfg: Config, *, force: str | None = None):
-    """Build the selected cognition backend, falling back to local gemma4 if a
-    chosen cloud brain is unreachable/keyless. Returns (llm, note-or-None)."""
+    """Build Aero's brain (a two-speed router when configured, AERO-BRAIN-303),
+    falling back to local gemma4 if a chosen single cloud brain is unreachable.
+    Returns (llm, note-or-None)."""
     from aero import settings as st
     from aero.cognition.ollama_backend import OllamaCognition
 
-    llm = st.build_brain(cfg, force=force)
+    llm = st.build_router(cfg, force=force)
+    # A bare single cloud brain that's unreachable -> fall back to local. (The
+    # router handles its own primary->reflex fallback, so this only fires for a
+    # non-routed single cloud profile.)
     if llm.__class__.__name__ == "CloudCognition" and not llm.health_check():
         note = ("Cloud brain unreachable (no API key or offline) — using local "
-                "gemma4. Set a key: `setx AERO_BRAIN_API_KEY <key>` and see "
-                "docs/CLOUD_BRAIN_SETUP.md.")
+                "gemma4. Store a key: `aero brain --set-key <profile> <key>` "
+                "and see docs/OPEN_BRAIN_SETUP.md.")
         return OllamaCognition(), note
     return llm, None
 
@@ -272,36 +276,83 @@ def cmd_voices(cfg: Config, args) -> int:
 
 
 def cmd_brain(cfg: Config, args) -> int:
-    """Show or switch Aero's brain: local gemma4 (private) or a cloud boost."""
+    """Show or switch Aero's brain — the registry of swappable profiles, plus the
+    two-speed router and the keyring key vault (AERO-BRAIN-301/303/304)."""
     from aero import settings as st
-    from aero.cognition.cloud_backend import (API_KEY_ENVS, PROVIDERS,
-                                              resolve_api_key)
+    from aero.cognition import keys as _keys
+    from aero.cognition.registry import registry
 
     cur = st.load(cfg)
-    if args.set:
-        cur.brain = args.set
-        if args.provider:
-            cur.cloud_provider = args.provider
-        if args.model:
-            cur.cloud_model = args.model
-        st.save(cur, cfg)
-        print(f"Brain set to: {cur.brain}"
-              + (f" ({cur.cloud_provider}:{cur.cloud_model})" if cur.brain == "cloud" else ""))
-        if cur.brain == "cloud" and not resolve_api_key():
-            print("  ! No API key found. Set one, e.g.: setx AERO_BRAIN_API_KEY <key>")
+    changed = False
+
+    # -- key vault ---------------------------------------------------------
+    if getattr(args, "set_key", None):
+        pid, key = args.set_key
+        if _keys.set_key(pid, key):
+            print(f"Stored API key for '{pid}' in the OS keyring.")
+        else:
+            print("No keyring backend available. Install it (pip install -e "
+                  "'.[keyring]') or use an env var. See docs/OPEN_BRAIN_SETUP.md.")
+        return 0
+    if getattr(args, "del_key", None):
+        ok = _keys.delete_key(args.del_key)
+        print(f"Removed stored key for '{args.del_key}'." if ok
+              else f"No stored key for '{args.del_key}' (or no keyring backend).")
         return 0
 
-    print(f"Current brain: {cur.brain}")
-    print(f"  local : gemma4:e4b via Ollama (private, ~5-11s/turn on CPU)")
-    print(f"  cloud : {cur.cloud_provider} / {cur.cloud_model} "
-          f"(real-time; prompt+memory context leaves the device)")
-    key = resolve_api_key()
-    print(f"\nCloud API key: {'found' if key else 'NOT set'} "
-          f"(env: {', '.join(API_KEY_ENVS)})")
-    print(f"Providers: {', '.join(PROVIDERS)}  (or a full base URL)")
-    print("\nSwitch:  aero brain --set cloud   |   aero brain --set local")
-    print("Configure cloud:  aero brain --set cloud --provider groq "
-          "--model llama-3.3-70b-versatile")
+    # -- mutations ---------------------------------------------------------
+    if args.set:
+        cur.brain_profile = args.set
+        cur.brain = args.set  # keep legacy field in sync for older readers
+        changed = True
+    if args.provider:
+        cur.brain = "cloud"
+        cur.cloud_provider = args.provider
+        changed = True
+    if args.model:
+        # Override the model of the active profile via a custom-profile entry.
+        target = cur.brain_profile or (cur.cloud_provider if cur.brain == "cloud" else "cloud")
+        cur.brains = {**cur.brains, target: {**cur.brains.get(target, {}), "model": args.model}}
+        cur.cloud_model = args.model
+        changed = True
+    if args.reflex:
+        cur.reflex_profile = args.reflex
+        changed = True
+    if args.primary:
+        cur.primary_profile = args.primary
+        changed = True
+    if getattr(args, "private_only", None) is not None:
+        cur.brain_private_only = args.private_only
+        changed = True
+
+    if changed:
+        st.save(cur, cfg)
+        print("Updated brain settings.\n")
+
+    # -- status ------------------------------------------------------------
+    reg = registry(cur.brains)
+    active = st.resolve_brain_profile(cur)
+    print(f"Active brain: {active.id}  ({active.model})")
+    if cur.reflex_profile or cur.primary_profile:
+        rp = st.resolve_brain_profile(cur, cur.reflex_profile or None)
+        pp = st.resolve_brain_profile(cur, cur.primary_profile or None)
+        print(f"  two-speed router: chat={pp.id}  tag/reflex={rp.id}"
+              + ("  [private-only]" if cur.brain_private_only else ""))
+
+    print("\nAvailable profiles:")
+    for pid, prof in reg.items():
+        key = _keys.resolve_key(prof)
+        tag = "private" if prof.is_private else prof.cost_tier
+        keystate = "no key needed" if (prof.is_local and prof.key_env is None) \
+            else ("key set" if key else "NO KEY")
+        mark = "*" if pid == active.id else " "
+        print(f"  {mark} {pid:<11} {tag:<10} {keystate:<13} {prof.label}")
+
+    print(f"\nKeyring backend: {'available' if _keys.keyring_available() else 'NOT installed (env-var fallback)'}")
+    print("\nSwitch brain:     aero brain --set groq")
+    print("Two-speed:        aero brain --primary groq --reflex local")
+    print("Store a key:      aero brain --set-key groq <key>")
+    print("Details:          docs/OPEN_BRAIN_SETUP.md")
     return 0
 
 
@@ -457,8 +508,9 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("snapshot", nargs="?", help="path to a .aero-backup file")
     sub.add_parser("smoke", help="run the Milestone-1 acceptance smoke test")
     ch = sub.add_parser("chat", help="interactive memory-in-the-loop chat (Milestone 2)")
-    ch.add_argument("--brain", choices=["local", "cloud"],
-                    help="override brain for this session (default: persisted setting)")
+    ch.add_argument("--brain", metavar="PROFILE",
+                    help="override brain for this session: a profile id "
+                         "(local/groq/openai/...) or a base URL (default: persisted)")
     sub.add_parser("consolidate", help="turn logged raw events into durable memory")
     w = sub.add_parser("watch", help="print live Tier-0 world state (perception check)")
     w.add_argument("--interval", type=float, default=1.0, help="seconds between samples")
@@ -487,12 +539,29 @@ def build_parser() -> argparse.ArgumentParser:
     vc.add_argument("--no-speak", action="store_true", help="don't voice replies (text mode)")
     vc.add_argument("--realtime", action="store_true",
                     help="hands-free real-time loop (VAD turn-taking + barge-in; no button)")
-    vc.add_argument("--brain", choices=["local", "cloud"],
-                    help="override brain for this session (default: persisted setting)")
-    br = sub.add_parser("brain", help="show/switch Aero's brain (local gemma4 | cloud boost)")
-    br.add_argument("--set", choices=["local", "cloud"], help="select the brain tier")
-    br.add_argument("--provider", help="cloud provider alias (groq/openai/...) or base URL")
-    br.add_argument("--model", help="cloud model id, e.g. llama-3.3-70b-versatile")
+    vc.add_argument("--brain", metavar="PROFILE",
+                    help="override brain for this session: a profile id "
+                         "(local/groq/openai/...) or a base URL (default: persisted)")
+    br = sub.add_parser("brain", help="show/switch Aero's brain (registry of swappable profiles)")
+    br.add_argument("--set", metavar="PROFILE",
+                    help="select the active brain profile (local/groq/openai/litellm/... "
+                         "or legacy local|cloud)")
+    br.add_argument("--provider", help="[legacy cloud] provider alias or base URL")
+    br.add_argument("--model", help="override the model id for the selected profile")
+    # Two-speed router (AERO-BRAIN-303)
+    br.add_argument("--reflex", metavar="PROFILE",
+                    help="set the cheap/private brain for tagging + reflex")
+    br.add_argument("--primary", metavar="PROFILE",
+                    help="set the strong brain for conversation")
+    br.add_argument("--private-only", dest="private_only", action="store_true",
+                    help="refuse a cloud primary; keep personal talk on-device")
+    br.add_argument("--shared", dest="private_only", action="store_false",
+                    help="allow a cloud primary (opposite of --private-only)")
+    br.set_defaults(private_only=None)
+    # Key vault (AERO-BRAIN-304)
+    br.add_argument("--set-key", nargs=2, metavar=("PROFILE", "KEY"),
+                    help="store an API key for a profile in the OS keyring")
+    br.add_argument("--del-key", metavar="PROFILE", help="remove a stored API key")
     return p
 
 
