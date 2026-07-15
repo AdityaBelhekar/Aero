@@ -46,6 +46,42 @@ class VoiceSettings:
     # the local reflex brain. Off by default so an explicitly-chosen cloud brain
     # still works; on = "personal talk never leaves the device".
     brain_private_only: bool = False
+    # -- Control App: personality dials (AERO-APP-206) ---------------------
+    # How Aero behaves, tuned by the human. Persona *identity* stays fixed in
+    # prompts/persona.py (never collapses, AERO-PERS-004); these dial the knobs
+    # the PRD says adapt: chattiness, roast intensity, formality, quiet hours,
+    # language mix. Stored here (portable) so a model swap can't change them.
+    persona: dict = field(default_factory=lambda: dict(DEFAULT_PERSONA_DIALS))
+    # -- Control App: capability grants + kill switch (AERO-APP-205) -------
+    # Scope -> granted?. Full consent enforcement is M12 (Little Hands); M10
+    # stores + surfaces the grants and the global kill switch for the UI.
+    permissions: dict = field(default_factory=dict)
+    killswitch: bool = False  # True = Aero takes no actions at all (panic off)
+
+
+# Personality dials with safe, conservative defaults. Numeric dials are 0..1;
+# quiet_hours is [start_hour, end_hour) in local time (Aero stays quiet then).
+DEFAULT_PERSONA_DIALS: dict = {
+    "chattiness": 0.5,      # 0 = only speaks when spoken to, 1 = very talkative
+    "roast_level": 0.2,     # starts low; the relationship model earns more
+    "formality": 0.3,       # 0 = pure slang, 1 = buttoned-up
+    "energy": 0.6,          # baseline response energy
+    "language_mix": "auto", # auto | english | hinglish | marathi-mix
+    "quiet_hours": [1, 8],  # no proactive speech 1am–8am by default
+}
+
+# Capability scopes the Control App can grant/revoke (AERO-APP-205). These are the
+# surfaces M12's consent gate will enforce; M10 just records the grant state.
+PERMISSION_SCOPES: tuple[str, ...] = (
+    "apps",       # launch/close applications
+    "files",      # read/organise files in an allowed folder
+    "media",      # control media playback
+    "browser",    # open URLs / tabs
+    "shell",      # run shell commands (high-risk; off by default)
+    "games",      # game connectors (Minecraft, etc.)
+    "screen",     # screen capture / OCR (Eyes)
+    "camera",     # camera (local-only)
+)
 
 
 def _path(cfg: Config) -> Path:
@@ -69,6 +105,33 @@ def save(settings: VoiceSettings, cfg: Config | None = None) -> None:
     cfg = cfg or Config.load()
     cfg.ensure_dirs()
     _path(cfg).write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
+
+
+# -- persona dials + permissions helpers (M10) -----------------------------
+def merged_persona(s: VoiceSettings) -> dict:
+    """Persona dials with defaults filled in for any missing/newly-added key, so
+    old settings files keep working as dials are introduced."""
+    return {**DEFAULT_PERSONA_DIALS, **(s.persona or {})}
+
+
+def is_quiet_hours(s: VoiceSettings, hour: int) -> bool:
+    """True if ``hour`` (0–23, local) falls in Aero's quiet window — used later to
+    suppress proactive speech (M12+). Handles windows that wrap midnight."""
+    qh = merged_persona(s).get("quiet_hours") or [1, 8]
+    start, end = int(qh[0]), int(qh[1])
+    if start == end:
+        return False
+    if start < end:
+        return start <= hour < end
+    return hour >= start or hour < end  # wraps past midnight
+
+
+def permission_granted(s: VoiceSettings, scope: str) -> bool:
+    """Whether a capability scope is currently granted. The kill switch overrides
+    everything to off (AERO-SAFE / panic). Default-deny for unknown scopes."""
+    if s.killswitch:
+        return False
+    return bool((s.permissions or {}).get(scope, False))
 
 
 def build_tts(cfg: Config | None = None):
