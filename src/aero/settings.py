@@ -39,9 +39,13 @@ class VoiceSettings:
     brains: dict = field(default_factory=dict)
     # Two-speed router (AERO-BRAIN-303): the cheap/private brain used for reflex
     # + consolidation tagging, and the strong brain used for chat. Empty ->
-    # single-brain mode (both = the active profile). Wired in M8.3.
+    # single-brain mode (both = the active profile).
     reflex_profile: str = ""
     primary_profile: str = ""
+    # Privacy guard: refuse a non-private (cloud) primary and keep everything on
+    # the local reflex brain. Off by default so an explicitly-chosen cloud brain
+    # still works; on = "personal talk never leaves the device".
+    brain_private_only: bool = False
 
 
 def _path(cfg: Config) -> Path:
@@ -140,3 +144,35 @@ def build_brain(cfg: Config | None = None, *, force: str | None = None):
     s = load(cfg)
     profile = resolve_brain_profile(s, force)
     return build_from_profile(profile, api_key=resolve_key(profile))
+
+
+def build_router(cfg: Config | None = None, *, force: str | None = None):
+    """Construct Aero's brain as a two-speed router (AERO-BRAIN-303) when the
+    user has configured distinct reflex/primary profiles; otherwise a plain
+    single brain (so this is a safe drop-in for build_brain).
+
+    ``force`` pins the *primary* (conversational) brain for one call — reflex
+    still handles tagging, so `--brain groq` makes you talk to Groq while
+    consolidation stays cheap/local."""
+    from aero.cognition.keys import resolve_key
+    from aero.cognition.registry import build_from_profile
+    from aero.cognition.router import BrainRouter
+
+    s = load(cfg)
+
+    # No two-speed config and no override -> single brain (today's behaviour).
+    if not s.reflex_profile and not s.primary_profile and not force:
+        return build_brain(cfg)
+
+    reflex_prof = resolve_brain_profile(s, s.reflex_profile or None)
+    primary_prof = resolve_brain_profile(s, force or s.primary_profile or None)
+    reflex = build_from_profile(reflex_prof, api_key=resolve_key(reflex_prof))
+    # Same profile for both roles -> single-brain router (no second backend).
+    if primary_prof.id == reflex_prof.id:
+        return BrainRouter(reflex, None, private_only=s.brain_private_only)
+    primary = build_from_profile(primary_prof, api_key=resolve_key(primary_prof))
+    return BrainRouter(
+        reflex, primary,
+        private_only=s.brain_private_only,
+        primary_is_private=primary_prof.is_private,
+    )
