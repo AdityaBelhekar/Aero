@@ -7,7 +7,7 @@ user edits them directly. Stored at ``AERO_HOME/settings.json``.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from aero.config import Config
@@ -24,9 +24,24 @@ class VoiceSettings:
     # (OpenAI-compatible online brain, sub-second — but the prompt leaves the
     # device). Local is the privacy-first default. API key comes from the
     # environment (see cloud_backend.API_KEY_ENVS), never persisted here.
+    #
+    # v0.3 "Open Aero" (AERO-BRAIN-301) generalises this into a registry: any
+    # named brain profile is selectable. The legacy ``brain``/``cloud_*`` fields
+    # below still work and are migrated on read — 'cloud' maps to the profile
+    # named by ``cloud_provider`` (model overridden by ``cloud_model``).
     brain: str = "local"
     cloud_provider: str = "groq"  # alias in cloud_backend.PROVIDERS, or a full URL
     cloud_model: str = "llama-3.3-70b-versatile"
+    # Active brain profile id (registry.py). Empty -> derive from legacy ``brain``.
+    brain_profile: str = ""
+    # User-defined brain profiles, overlaid on the built-ins (registry.registry).
+    # Maps profile id -> partial BrainProfile field dict.
+    brains: dict = field(default_factory=dict)
+    # Two-speed router (AERO-BRAIN-303): the cheap/private brain used for reflex
+    # + consolidation tagging, and the strong brain used for chat. Empty ->
+    # single-brain mode (both = the active profile). Wired in M8.3.
+    reflex_profile: str = ""
+    primary_profile: str = ""
 
 
 def _path(cfg: Config) -> Path:
@@ -77,14 +92,51 @@ def build_stt(cfg: Config | None = None, *, model: str | None = None):
     return _build(model or s.stt_model)
 
 
+def resolve_brain_profile(s: VoiceSettings, which: str | None = None):
+    """Resolve the active brain to a concrete ``BrainProfile`` (AERO-BRAIN-301).
+
+    ``which`` (a profile id, or the legacy 'local'/'cloud', or a bare provider
+    alias) overrides the persisted selection for one call. Resolution order:
+
+      1. explicit ``which`` if given, else ``s.brain_profile``, else legacy ``s.brain``
+      2. legacy 'cloud' -> the profile named by ``s.cloud_provider``, with its
+         model overridden by ``s.cloud_model`` (back-compat with v0.2 settings)
+      3. a known profile id -> that profile from the registry
+      4. anything else -> an ad-hoc OpenAI-adapter profile aimed at ``which`` as
+         a base URL (so a raw endpoint still works without pre-registration)
+    """
+    from aero.cognition.registry import BrainProfile, registry
+
+    reg = registry(s.brains)
+    sel = which or s.brain_profile or s.brain or "local"
+
+    if sel == "cloud":  # legacy two-way setting
+        from dataclasses import replace
+        base = reg.get(s.cloud_provider)
+        if base is not None:
+            return replace(base, model=s.cloud_model)
+        return BrainProfile(id="cloud", adapter="openai",
+                            model=s.cloud_model, base_url=s.cloud_provider,
+                            key_env="AERO_BRAIN_API_KEY", cost_tier="paid")
+    if sel == "local":
+        return reg["local"]
+    if sel in reg:
+        return reg[sel]
+    # Unknown id -> treat as a raw OpenAI-compatible base URL.
+    return BrainProfile(id=sel, adapter="openai", model=s.cloud_model,
+                        base_url=sel, key_env="AERO_BRAIN_API_KEY",
+                        cost_tier="paid")
+
+
 def build_brain(cfg: Config | None = None, *, force: str | None = None):
-    """Construct the selected cognition backend. 'local' -> gemma4 via Ollama
-    (private default); 'cloud' -> OpenAI-compatible online brain (real-time).
-    ``force`` overrides the persisted choice for one call (e.g. `--brain cloud`)."""
-    from aero.cognition.ollama_backend import OllamaCognition
+    """Construct the selected cognition backend from its registry profile.
+
+    'local' -> gemma4 via Ollama (private default); any other profile ->
+    OpenAI-compatible brain (cloud provider or local LiteLLM proxy). ``force``
+    overrides the persisted choice for one call (e.g. `--brain groq`)."""
+    from aero.cognition.keys import resolve_key
+    from aero.cognition.registry import build_from_profile
+
     s = load(cfg)
-    which = force or s.brain
-    if which == "cloud":
-        from aero.cognition.cloud_backend import CloudCognition
-        return CloudCognition(s.cloud_model, base_url=s.cloud_provider)
-    return OllamaCognition()
+    profile = resolve_brain_profile(s, force)
+    return build_from_profile(profile, api_key=resolve_key(profile))
