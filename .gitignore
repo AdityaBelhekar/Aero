@@ -22,6 +22,10 @@ venv/
 # Node / UI
 node_modules/
 ui/dist/
+# Rust / Tauri build artifacts (Control App)
+ui/control-app/src-tauri/target/
+ui/control-app/src-tauri/gen/
+ui/control-app/dist/
 
 # OS / editor
 .DS_Store

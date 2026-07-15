@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aero Control",
+  "version": "0.1.0",
+  "identifier": "com.aero.control",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Aero Control",
+        "width": 980,
+        "height": 760,
+        "minWidth": 720,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

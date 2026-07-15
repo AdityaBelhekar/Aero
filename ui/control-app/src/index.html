@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aero Control</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Aero <span class="dim">Control</span></h1>
+      <div id="status-pill" class="pill">connecting…</div>
+      <button id="killswitch" class="kill" title="Stop all actions">◉ Kill switch</button>
+    </header>
+
+    <nav id="tabs">
+      <button data-panel="brain" class="active">Brain</button>
+      <button data-panel="voice">Voice</button>
+      <button data-panel="persona">Personality</button>
+      <button data-panel="perms">Permissions</button>
+      <button data-panel="memory">Memory</button>
+    </nav>
+
+    <main>
+      <section id="brain" class="panel active">
+        <h2>Brain</h2>
+        <p class="hint">Pick which model powers Aero. His personality lives in the
+          vault, not the weights — this only changes how smart/fast/private he is.</p>
+        <div id="brain-list" class="cards"></div>
+        <div class="router">
+          <h3>Two-speed router</h3>
+          <label>Chat brain <select id="router-primary"></select></label>
+          <label>Tagging / reflex <select id="router-reflex"></select></label>
+          <label class="check"><input type="checkbox" id="router-private" />
+            Private-only (never send personal talk to a cloud brain)</label>
+          <button id="router-save">Save router</button>
+        </div>
+      </section>
+
+      <section id="voice" class="panel">
+        <h2>Voice</h2>
+        <label>Engine <select id="voice-engine"></select></label>
+        <label>STT model <input id="voice-stt" /></label>
+        <button id="voice-save">Save</button>
+      </section>
+
+      <section id="persona" class="panel">
+        <h2>Personality</h2>
+        <p class="hint">Dial how Aero behaves. His core identity stays fixed; these
+          are the knobs that adapt.</p>
+        <div id="persona-dials"></div>
+        <button id="persona-save">Save dials</button>
+      </section>
+
+      <section id="perms" class="panel">
+        <h2>Permissions</h2>
+        <p class="hint">What Aero is allowed to do. Everything is off by default;
+          the kill switch forces all of it off instantly.</p>
+        <div id="perms-list" class="perms"></div>
+      </section>
+
+      <section id="memory" class="panel">
+        <h2>Memory</h2>
+        <div class="search">
+          <input id="mem-query" placeholder="search Aero's memories…" />
+          <button id="mem-search">Search</button>
+        </div>
+        <div id="mem-list" class="mem"></div>
+      </section>
+    </main>
+
+    <footer id="toast"></footer>
+    <script src="app.js"></script>
+  </body>
+</html>

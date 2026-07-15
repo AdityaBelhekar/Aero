@@ -1,0 +1,14 @@
+{
+  "name": "aero-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aero Control App — configure your companion (v0.3 Pillar 2)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
