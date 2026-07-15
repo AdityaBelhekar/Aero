@@ -50,6 +50,7 @@ class ControlService:
             "brain.set_key": self._brain_set_key,
             "brain.del_key": self._brain_del_key,
             "voice.list": self._voice_list,
+            "voice.catalog": self._voice_catalog,
             "voice.get": self._voice_get,
             "voice.set": self._voice_set,
             "persona.get": self._persona_get,
@@ -216,6 +217,29 @@ class ControlService:
             "voices": {"svara": s.svara_voice, "kokoro": s.kokoro_voice},
             "stt_model": s.stt_model,
         }
+
+    def _voice_catalog(self, p: dict) -> dict:
+        """The voice marketplace listing (AERO-VOX-401/402): every STT/TTS engine
+        with its capabilities + key/active state, for the Voice panel."""
+        from aero.cognition import keys as _keys
+        from aero.voice.catalog import registry as _vreg
+
+        s = self._settings()
+        reg = _vreg(s.voice_engines)
+        active = {"tts": s.engine, "stt": s.stt_model}
+        out = {"tts": [], "stt": []}
+        for prof in reg.values():
+            has_key = (prof.local and prof.key_env is None) \
+                or _keys.resolve_voice_key(prof) is not None
+            out[prof.role].append({
+                "id": prof.id, "backend": prof.backend, "cost_tier": prof.cost_tier,
+                "local": prof.local, "private": prof.private,
+                "streaming": prof.streaming, "emotion": prof.emotion,
+                "languages": list(prof.languages), "implemented": prof.implemented,
+                "key_set": has_key, "label": prof.label,
+                "active": prof.id == active.get(prof.role),
+            })
+        return out
 
     def _voice_get(self, p: dict) -> dict:
         s = self._settings()

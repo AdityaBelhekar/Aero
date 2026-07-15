@@ -232,6 +232,27 @@ def cmd_voices(cfg: Config, args) -> int:
                                        describe_voice, voices)
 
     cur = st.load(cfg)
+    if getattr(args, "catalog", False):
+        from aero.control.service import ControlService
+        cat = ControlService(cfg).dispatch("voice.catalog")["result"]
+        for role in ("stt", "tts"):
+            print(f"\n{role.upper()} engines (marketplace):")
+            for e in cat[role]:
+                tags = []
+                if e["local"]:
+                    tags.append("local")
+                if e["streaming"]:
+                    tags.append("stream")
+                if e["emotion"]:
+                    tags.append("emotion")
+                mark = "*" if e["active"] else " "
+                state = ("no adapter" if not e["implemented"]
+                         else "ready" if e["local"]
+                         else "key set" if e["key_set"] else "NO KEY")
+                print(f"  {mark} {e['id']:<14} {e['cost_tier']:<11} {state:<11} "
+                      f"[{','.join(tags)}]  {e['label']}")
+        print("\nSelect TTS:  aero voices --engine kokoro   |   STT: aero voice --model whisper-small")
+        return 0
     if args.engine:
         cur.engine = args.engine
         st.save(cur, cfg)
@@ -561,6 +582,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ssml", action="store_true", help="print the rendered SSML")
     sub.add_parser("mics", help="list microphone devices")
     vo = sub.add_parser("voices", help="list/select Aero's Svara voice + TTS engine")
+    vo.add_argument("--catalog", action="store_true",
+                    help="show the full STT+TTS engine marketplace (M11)")
     vo.add_argument("--set", help="choose a Svara voice profile, e.g. hi_male")
     vo.add_argument("--engine", choices=["sapi", "svara", "parler", "kokoro"],
                     help="set the TTS engine")
