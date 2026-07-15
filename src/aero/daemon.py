@@ -20,7 +20,6 @@ import logging
 import signal
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from aero.cognition.embeddings import OllamaEmbedder
@@ -39,6 +38,7 @@ class DaemonConfig:
     idle_consolidate_seconds: float = 120.0  # idle this long -> consolidate
     consolidate_batch: int = 3           # small batches keep it interruptible
     keep_alive: str = "30m"
+    control_ipc: bool = True             # serve the control plane for UIs to attach
 
 
 class AeroDaemon:
@@ -60,6 +60,7 @@ class AeroDaemon:
 
         self._running = False
         self._last_warm = 0.0
+        self._control = None  # ControlServer, started in start()
 
     # -- lifecycle ---------------------------------------------------------
     def _make_logger(self, logs_dir: Path) -> logging.Logger:
@@ -96,6 +97,7 @@ class AeroDaemon:
         self._install_signals()
         self._running = True
         self._warm_models()
+        self._start_control()
         self.log.info("Aero daemon started (vault=%s)", self.vault.path)
         try:
             while self._running:
@@ -114,8 +116,29 @@ class AeroDaemon:
         while self._running and time.monotonic() < end:
             time.sleep(min(0.25, max(0.0, end - time.monotonic())))
 
+    def _start_control(self) -> None:
+        """Serve the control plane so the Control App / overlay can attach
+        (AERO-APP-201). Its own vault connection is opened lazily in the server
+        thread — never shares the daemon's thread-bound connection."""
+        if not self.dcfg.control_ipc:
+            return
+        try:
+            from aero.control.ipc import ControlServer, socket_path
+            from aero.control.service import ControlService
+            self._control = ControlServer(ControlService(self.cfg), cfg=self.cfg)
+            self._control.start_background()
+            self.log.info("control IPC listening (%s)", socket_path(self.cfg))
+        except Exception:
+            self.log.exception("control IPC failed to start (continuing headless)")
+            self._control = None
+
     def shutdown(self) -> None:
         self.log.info("Aero daemon stopped")
+        if self._control is not None:
+            try:
+                self._control.stop()
+            except Exception:
+                pass
         try:
             self.vault.close()
         except Exception:

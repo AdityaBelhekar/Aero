@@ -356,6 +356,40 @@ def cmd_brain(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_control(cfg: Config, args) -> int:
+    """Call the control plane (AERO-APP-201). Dispatches locally by default; with
+    --remote it goes through a running daemon's IPC socket. Handy for scripting
+    and for testing the same API the Control App uses."""
+    import json as _json
+
+    from aero.control.service import ControlService
+
+    if args.op in (None, "ops"):
+        print("\n".join(ControlService(cfg).ops()))
+        return 0
+
+    params = {}
+    if args.params:
+        try:
+            params = _json.loads(args.params)
+        except _json.JSONDecodeError as e:
+            print(f"bad --params JSON: {e}")
+            return 2
+
+    if args.remote:
+        from aero.control.ipc import ControlClient, ControlNotRunning
+        try:
+            resp = ControlClient(cfg).call(args.op, params)
+        except ControlNotRunning as e:
+            print(f"daemon not reachable: {e}")
+            return 1
+    else:
+        resp = ControlService(cfg).dispatch(args.op, params)
+
+    print(_json.dumps(resp, indent=2, ensure_ascii=False))
+    return 0 if resp.get("ok") else 1
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -562,6 +596,12 @@ def build_parser() -> argparse.ArgumentParser:
     br.add_argument("--set-key", nargs=2, metavar=("PROFILE", "KEY"),
                     help="store an API key for a profile in the OS keyring")
     br.add_argument("--del-key", metavar="PROFILE", help="remove a stored API key")
+    ctl = sub.add_parser("control", help="call the control plane (Control-App API)")
+    ctl.add_argument("op", nargs="?", help="operation, e.g. status / brain.list "
+                     "/ memory.list (omit or 'ops' to list all)")
+    ctl.add_argument("params", nargs="?", help="JSON params, e.g. '{\"profile\":\"groq\"}'")
+    ctl.add_argument("--remote", action="store_true",
+                     help="call a running daemon over IPC instead of local dispatch")
     return p
 
 
@@ -580,6 +620,7 @@ _HANDLERS = {
     "voice": cmd_voice,
     "voices": cmd_voices,
     "brain": cmd_brain,
+    "control": cmd_control,
 }
 
 
