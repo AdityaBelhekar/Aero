@@ -177,4 +177,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log (ts);
 CREATE INDEX IF NOT EXISTS idx_audit_table ON audit_log (table_name);
+
+-- Append-only journal of every action Aero took a run at — allowed, refused,
+-- confirmed, or dry-run (AERO-ACT-504). Distinct from audit_log (which tracks
+-- vault mutations); this tracks the *hands*. The user can see everything Aero
+-- did or was stopped from doing, and why.
+CREATE TABLE IF NOT EXISTS actuator_log (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts        TEXT NOT NULL,
+    tool      TEXT NOT NULL,
+    scope     TEXT NOT NULL,
+    params_json TEXT,
+    verdict   TEXT NOT NULL,     -- 'allow'|'confirm'|'refuse'
+    reason    TEXT,
+    executed  INTEGER NOT NULL DEFAULT 0,  -- did the side-effect actually run?
+    dry_run   INTEGER NOT NULL DEFAULT 0,
+    outcome   TEXT,              -- 'ok'|'error'|null (not run)
+    error     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_actuator_ts ON actuator_log (ts);
+CREATE INDEX IF NOT EXISTS idx_actuator_tool ON actuator_log (tool);
 """
