@@ -84,6 +84,7 @@ PERMISSION_SCOPES: tuple[str, ...] = (
     "games",      # game connectors (Minecraft, etc.)
     "screen",     # screen capture / OCR (Eyes)
     "camera",     # camera (local-only)
+    "mcp",        # tools bridged from MCP servers (AERO-ACT-506)
 )
 
 
