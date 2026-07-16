@@ -62,7 +62,11 @@ class ControlService:
             "memory.get": self._memory_get,
             "memory.edit": self._memory_edit,
             "memory.delete": self._memory_delete,
+            "hands.tools": self._hands_tools,
+            "hands.run": self._hands_run,
+            "hands.log": self._hands_log,
         }
+        self._hands = None
 
     # -- dispatch ----------------------------------------------------------
     def ops(self) -> list[str]:
@@ -350,6 +354,37 @@ class ControlService:
         changes["updated_at"] = now_iso()
         store.repo.update("memories", mid, changes)
         return {"memory": _memory_dict(store.get(mid))}
+
+    # -- little hands (AERO-ACT-5xx) ---------------------------------------
+    def _hands_executor(self):
+        """Registry + consent gate + actuator journal, sharing the vault. Every
+        UI-triggered action goes through this, so the gate + journal apply."""
+        if self._hands is None:
+            from aero.hands.consent import ConsentGate
+            from aero.hands.executor import HandsExecutor
+            from aero.hands.journal import ActuatorJournal
+            from aero.hands.registry import default_registry
+            journal = ActuatorJournal(self.store().vault)
+            self._hands = HandsExecutor(default_registry(), ConsentGate(self.cfg),
+                                        journal)
+        return self._hands
+
+    def _hands_tools(self, p: dict) -> dict:
+        return {"tools": self._hands_executor().registry.describe()}
+
+    def _hands_run(self, p: dict) -> dict:
+        tool = _require(p, "tool")
+        outcome = self._hands_executor().run(
+            tool, p.get("params") or {},
+            confirmed=bool(p.get("confirmed", False)),
+            dry_run=bool(p.get("dry_run", False)),
+        )
+        return outcome.to_dict()
+
+    def _hands_log(self, p: dict) -> dict:
+        journal = self._hands_executor().journal
+        return {"entries": journal.recent(int(p.get("limit", 50)),
+                                          tool=p.get("tool"))}
 
     def _memory_delete(self, p: dict) -> dict:
         # Soft delete (tombstone) so provenance survives and it's reversible; a

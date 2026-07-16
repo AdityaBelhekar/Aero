@@ -411,6 +411,44 @@ def cmd_control(cfg: Config, args) -> int:
     return 0 if resp.get("ok") else 1
 
 
+def cmd_hands(cfg: Config, args) -> int:
+    """Little Hands (M12): list tools, run one through the consent gate, or view
+    the actuator log. Actions are default-deny + audited; hard-gate actions need
+    --confirm."""
+    import json as _json
+
+    from aero.control.service import ControlService
+    svc = ControlService(cfg)
+
+    if args.hands_cmd in (None, "tools"):
+        tools = svc.dispatch("hands.tools")["result"]["tools"]
+        print("Tools (grant scopes in the Control App / `aero control perms.grant`):")
+        for t in tools:
+            gate = " [HARD-GATE: always confirms]" if t["hard_gate"] else (
+                "" if t["reversible"] else " [irreversible: confirms]")
+            print(f"  {t['name']:<15} scope={t['scope']:<8} {t['description']}{gate}")
+        return 0
+
+    if args.hands_cmd == "log":
+        entries = svc.dispatch("hands.log", {"limit": args.limit})["result"]["entries"]
+        for e in entries:
+            flag = "✓" if e["executed"] else "·"
+            print(f"  {flag} {e['ts']}  {e['tool']:<15} {e['verdict']:<8} {e['reason']}")
+        return 0
+
+    if args.hands_cmd == "run":
+        params = _json.loads(args.params) if args.params else {}
+        out = svc.dispatch("hands.run", {"tool": args.tool, "params": params,
+                                         "confirmed": args.confirm,
+                                         "dry_run": args.dry_run})
+        print(_json.dumps(out, indent=2, ensure_ascii=False))
+        res = out.get("result", {})
+        d = (res.get("decision") or {}) if isinstance(res, dict) else {}
+        # non-zero exit if the action was blocked (useful for scripting)
+        return 0 if (isinstance(res, dict) and res.get("executed")) or d.get("verdict") == "allow" else 1
+    return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -625,6 +663,18 @@ def build_parser() -> argparse.ArgumentParser:
     ctl.add_argument("params", nargs="?", help="JSON params, e.g. '{\"profile\":\"groq\"}'")
     ctl.add_argument("--remote", action="store_true",
                      help="call a running daemon over IPC instead of local dispatch")
+    hd = sub.add_parser("hands", help="Little Hands: tools, run (consent-gated), log")
+    hsub = hd.add_subparsers(dest="hands_cmd")
+    hsub.add_parser("tools", help="list available tools + their scopes")
+    hrun = hsub.add_parser("run", help="run a tool through the consent gate")
+    hrun.add_argument("tool", help="tool name, e.g. open_url")
+    hrun.add_argument("params", nargs="?", help="JSON params, e.g. '{\"url\":\"...\"}'")
+    hrun.add_argument("--confirm", action="store_true",
+                      help="confirm a hard-gate / irreversible action")
+    hrun.add_argument("--dry-run", dest="dry_run", action="store_true",
+                      help="show the decision without executing")
+    hlog = hsub.add_parser("log", help="recent actuator journal entries")
+    hlog.add_argument("--limit", type=int, default=30)
     return p
 
 
@@ -644,6 +694,7 @@ _HANDLERS = {
     "voices": cmd_voices,
     "brain": cmd_brain,
     "control": cmd_control,
+    "hands": cmd_hands,
 }
 
 
