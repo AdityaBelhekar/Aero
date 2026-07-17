@@ -186,3 +186,78 @@ class Eyes:
             return LookResult(LookVerdict.UNAVAILABLE, source,
                               reason="capture returned nothing")
         return LookResult(LookVerdict.CAPTURED, source, frame=frame)
+
+
+# -- scene change + sparse sampling (cost control, AERO-VIS-002/003) --------
+def average_hash(thumb: bytes) -> int:
+    """64-ish-bit average hash of a small grayscale buffer: each byte becomes a
+    bit (1 if brighter than the mean). Robust to tiny changes, so a static screen
+    hashes the same frame to frame — the basis of scene-change detection."""
+    if not thumb:
+        return 0
+    mean = sum(thumb) / len(thumb)
+    bits = 0
+    for i, b in enumerate(thumb):
+        if b > mean:
+            bits |= (1 << i)
+    return bits
+
+
+def hamming(a: int, b: int) -> int:
+    return bin(a ^ b).count("1")
+
+
+class SceneChange:
+    """Tracks the last analysed thumbnail and reports meaningful changes. Below
+    ``threshold`` Hamming bits of difference is 'the same scene'."""
+
+    def __init__(self, threshold: int = 5):
+        self.threshold = threshold
+        self._last: int | None = None
+
+    def changed(self, thumb: bytes) -> bool:
+        h = average_hash(thumb)
+        if self._last is None or hamming(h, self._last) > self.threshold:
+            self._last = h
+            return True
+        return False
+
+    def reset(self) -> None:
+        self._last = None
+
+
+class VisionSampler:
+    """Decides when the *expensive* analysis (OCR / multimodal) should run, given
+    a cheaply-grabbed thumbnail — so Aero looks properly only when something
+    actually changed and not too often (AERO-VIS-002 event-driven budget).
+
+    A ``trigger`` (the user said "look at this", or a high-salience event) always
+    passes. Otherwise: rate-limited AND scene must have changed.
+    """
+
+    def __init__(self, *, min_interval: float = 2.0, threshold: int = 5,
+                 clock: Callable[[], float] | None = None):
+        import time
+        self.min_interval = min_interval
+        self._scene = SceneChange(threshold)
+        self._clock = clock or time.monotonic
+        self._last_analyze: float | None = None
+
+    def should_analyze(self, thumb: bytes | None = None, *,
+                       trigger: bool = False, now: float | None = None) -> bool:
+        now = self._clock() if now is None else now
+        if trigger:
+            self._commit(now, thumb)
+            return True
+        if self._last_analyze is not None and (now - self._last_analyze) < self.min_interval:
+            return False
+        if thumb is not None and not self._scene.changed(thumb):
+            return False
+        self._commit(now, thumb)
+        return True
+
+    def _commit(self, now: float, thumb: bytes | None) -> None:
+        self._last_analyze = now
+        if thumb is not None:
+            # keep the scene detector in sync so the next change is relative to now
+            self._scene._last = average_hash(thumb)
