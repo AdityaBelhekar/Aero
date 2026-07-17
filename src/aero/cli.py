@@ -449,6 +449,40 @@ def cmd_hands(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_eyes(cfg: Config, args) -> int:
+    """Eyes (M13): screen/camera status, a consent-gated look, or describe what's
+    on screen via a vision brain. Vision is off by default — grant 'screen' /
+    'camera' in the Control App first."""
+    import json as _json
+
+    from aero.control.service import ControlService
+    svc = ControlService(cfg)
+
+    if args.eyes_cmd in (None, "status"):
+        st_ = svc.dispatch("eyes.status")["result"]
+        print(f"Kill switch: {'ON' if st_['killswitch'] else 'off'}")
+        for name, s in st_["sources"].items():
+            print(f"  {name:<8} scope={s['scope']:<7} "
+                  f"grant={'yes' if s['granted'] else 'NO'}  "
+                  f"available={'yes' if s['available'] else 'no (headless/no device)'}")
+        print("\nGrant:  aero control perms.grant '{\"scope\":\"screen\",\"on\":true}'")
+        return 0
+
+    if args.eyes_cmd == "look":
+        out = svc.dispatch("eyes.look", {"source": args.source})["result"]
+        print(_json.dumps(out, indent=2, ensure_ascii=False))
+        return 0 if out.get("verdict") == "captured" else 1
+
+    if args.eyes_cmd == "describe":
+        out = svc.dispatch("eyes.describe",
+                           {"source": args.source, "prompt": args.prompt or
+                            "What's on the screen?"})["result"]
+        print(_json.dumps(out, indent=2, ensure_ascii=False))
+        v = out.get("vision")
+        return 0 if v and v.get("ok") else 1
+    return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -675,6 +709,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="show the decision without executing")
     hlog = hsub.add_parser("log", help="recent actuator journal entries")
     hlog.add_argument("--limit", type=int, default=30)
+    ey = sub.add_parser("eyes", help="Eyes (M13): screen/camera status, look, describe")
+    eysub = ey.add_subparsers(dest="eyes_cmd")
+    eysub.add_parser("status", help="show sources + grants + availability")
+    elook = eysub.add_parser("look", help="capture one frame (consent-gated)")
+    elook.add_argument("--source", default="screen", choices=["screen", "camera"])
+    edesc = eysub.add_parser("describe", help="capture + ask a vision brain")
+    edesc.add_argument("prompt", nargs="?", help="what to ask about the frame")
+    edesc.add_argument("--source", default="screen", choices=["screen", "camera"])
     return p
 
 
@@ -695,6 +737,7 @@ _HANDLERS = {
     "brain": cmd_brain,
     "control": cmd_control,
     "hands": cmd_hands,
+    "eyes": cmd_eyes,
 }
 
 

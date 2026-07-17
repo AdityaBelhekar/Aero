@@ -261,3 +261,76 @@ class VisionSampler:
         if thumb is not None:
             # keep the scene detector in sync so the next change is relative to now
             self._scene._last = average_hash(thumb)
+
+
+# -- real capture backends (optional; return None when unavailable) --------
+def _thumb_from_pixels(rgb, size: int = 8) -> bytes:
+    """8x8 grayscale thumbnail from a PIL image, for scene-hashing."""
+    small = rgb.convert("L").resize((size, size))
+    return bytes(small.getdata())
+
+
+def mss_screen_grabber() -> Grabber | None:
+    """A screen grabber using mss + Pillow, or None if either the deps or a
+    display are missing. Captures the primary monitor as PNG + a scene thumbnail.
+    (Needs a display; unavailable on a headless box — falls back to None.)"""
+    try:
+        import io
+
+        import mss
+        from PIL import Image
+    except Exception:
+        return None
+
+    def grab():
+        try:
+            with mss.mss() as sct:
+                mon = sct.monitors[1]
+                shot = sct.grab(mon)
+                img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                return buf.getvalue(), img.width, img.height, _thumb_from_pixels(img)
+        except Exception:
+            return None
+    return grab
+
+
+def opencv_camera_grabber(device: int = 0) -> Grabber | None:
+    """A camera grabber via OpenCV, or None if unavailable. Local-only; a frame
+    is read on demand and released. (Needs a camera device.)"""
+    try:
+        import io
+
+        import cv2
+        from PIL import Image
+    except Exception:
+        return None
+
+    def grab():
+        cap = None
+        try:
+            cap = cv2.VideoCapture(device)
+            ok, frame = cap.read()
+            if not ok:
+                return None
+            rgb = Image.fromarray(frame[:, :, ::-1])  # BGR -> RGB
+            buf = io.BytesIO()
+            rgb.save(buf, format="JPEG")
+            return buf.getvalue(), rgb.width, rgb.height, _thumb_from_pixels(rgb)
+        except Exception:
+            return None
+        finally:
+            if cap is not None:
+                cap.release()
+    return grab
+
+
+def build_eyes(cfg: Config | None = None) -> "Eyes":
+    """Assemble Eyes with the best available real capture backends. On a headless
+    box both sources exist but report unavailable() — consent + routing still work,
+    they just can't grab a frame until there's a display/camera."""
+    return Eyes(cfg, sources={
+        "screen": ScreenSource(mss_screen_grabber()),
+        "camera": CameraSource(opencv_camera_grabber()),
+    })

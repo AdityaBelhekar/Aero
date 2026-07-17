@@ -36,6 +36,11 @@ realtime_silero = ["sounddevice>=0.4.6", "silero-vad", "numpy"]
 # Aero falls back to environment variables. On Linux, keyring uses the Secret
 # Service (GNOME Keyring / KWallet); see docs/OPEN_BRAIN_SETUP.md.
 keyring = ["keyring>=24.0"]
+# Eyes (M13, AERO-VIS-6xx): screen capture (mss), image handling (Pillow), local
+# OCR (RapidOCR ONNX), and optional camera (OpenCV). All optional — vision is off
+# by default and degrades to unavailable without these. See docs/EYES_SETUP.md.
+vision = ["mss>=9.0", "pillow>=10.0", "rapidocr-onnxruntime>=1.3", "numpy"]
+camera = ["opencv-python>=4.8", "pillow>=10.0"]
 dev = ["pytest>=8.0", "ruff>=0.6.0"]
 
 [project.scripts]

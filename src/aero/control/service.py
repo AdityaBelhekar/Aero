@@ -65,8 +65,12 @@ class ControlService:
             "hands.tools": self._hands_tools,
             "hands.run": self._hands_run,
             "hands.log": self._hands_log,
+            "eyes.status": self._eyes_status,
+            "eyes.look": self._eyes_look,
+            "eyes.describe": self._eyes_describe,
         }
         self._hands = None
+        self._eyes = None
 
     # -- dispatch ----------------------------------------------------------
     def ops(self) -> list[str]:
@@ -385,6 +389,36 @@ class ControlService:
         journal = self._hands_executor().journal
         return {"entries": journal.recent(int(p.get("limit", 50)),
                                           tool=p.get("tool"))}
+
+    # -- eyes / vision (AERO-VIS-6xx) --------------------------------------
+    def _eyes_obj(self):
+        if self._eyes is None:
+            from aero.perception.vision import build_eyes
+            self._eyes = build_eyes(self.cfg)
+        return self._eyes
+
+    def _eyes_status(self, p: dict) -> dict:
+        s = self._settings()
+        eyes = self._eyes_obj()
+        return {
+            "sources": {name: {"scope": src.scope,
+                               "granted": st.permission_granted(s, src.scope),
+                               "available": src.available()}
+                        for name, src in eyes.sources.items()},
+            "killswitch": s.killswitch,
+        }
+
+    def _eyes_look(self, p: dict) -> dict:
+        return self._eyes_obj().look(p.get("source", "screen")).to_dict()
+
+    def _eyes_describe(self, p: dict) -> dict:
+        from aero.perception.vision_router import VisionRouter
+        look = self._eyes_obj().look(p.get("source", "screen"))
+        if not look.ok:
+            return {"look": look.to_dict(), "vision": None}
+        answer = VisionRouter(self.cfg).see(
+            look.frame, prompt=p.get("prompt", "What's on the screen?"))
+        return {"look": look.to_dict(), "vision": answer.to_dict()}
 
     def _memory_delete(self, p: dict) -> dict:
         # Soft delete (tombstone) so provenance survives and it's reversible; a
