@@ -59,6 +59,10 @@ def resolve_api_key(explicit: str | None = None) -> str | None:
 
 
 class CloudCognition(CognitionService):
+    # Mechanically capable of the OpenAI image path; whether the *model* groks
+    # images is the registry profile's supports_vision flag (routing decides).
+    supports_vision = True
+
     def __init__(
         self,
         model_name: str = "llama-3.3-70b-versatile",
@@ -142,6 +146,44 @@ class CloudCognition(CognitionService):
         except (json.JSONDecodeError, TypeError):
             parsed = None
         return parsed, result
+
+    def see(
+        self,
+        prompt: str,
+        image: bytes,
+        *,
+        media_type: str = "image/png",
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> CompletionResult:
+        """Vision via the OpenAI multimodal message shape: a user message whose
+        content is [text, image_url(data-URI)]. Works on any OpenAI-compatible
+        vision model (gpt-4o, gemini-*-flash, …)."""
+        import base64
+        b64 = base64.b64encode(image).decode("ascii")
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url",
+             "image_url": {"url": f"data:{media_type};base64,{b64}"}},
+        ]
+        payload: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": content}],
+            "temperature": temperature,
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        t0 = time.perf_counter()
+        raw = self._post("/chat/completions", payload)
+        elapsed = time.perf_counter() - t0
+        text = raw.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
+        usage = raw.get("usage", {}) or {}
+        stats = GenerationStats(
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            total_seconds=elapsed or 1e-9, eval_seconds=elapsed,
+        )
+        return CompletionResult(text=text.strip(), stats=stats, raw=raw)
 
     def _is_local(self) -> bool:
         return any(h in self.base_url for h in ("localhost", "127.0.0.1", "0.0.0.0"))

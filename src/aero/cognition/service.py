@@ -49,11 +49,19 @@ class CompletionResult:
     raw: dict[str, Any] | None = None
 
 
+class VisionUnsupported(RuntimeError):
+    """Raised when a brain is asked to see() but has no vision capability."""
+
+
 class CognitionService(ABC):
     """What Aero needs from a language model, and nothing more."""
 
     #: Human-readable identifier of the active model (for provenance/logs).
     model_name: str
+    #: Whether this backend can accept images via see() (AERO-VIS-602). The
+    #: *routing* decision uses the registry profile's supports_vision flag; this
+    #: says whether the backend mechanically implements the image path.
+    supports_vision: bool = False
 
     @abstractmethod
     def chat(
@@ -83,3 +91,17 @@ class CognitionService(ABC):
     @abstractmethod
     def health_check(self) -> bool:
         """True if the backend is reachable and the model is available."""
+
+    def see(
+        self,
+        prompt: str,
+        image: bytes,
+        *,
+        media_type: str = "image/png",
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> CompletionResult:
+        """Answer ``prompt`` about ``image`` (AERO-VIS-602). Default: unsupported —
+        vision-capable backends override this. Callers should route to a
+        supports_vision brain rather than calling this blindly."""
+        raise VisionUnsupported(f"{self.model_name} has no vision support")
