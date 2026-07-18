@@ -63,6 +63,10 @@ class VoiceSettings:
     # stores + surfaces the grants and the global kill switch for the UI.
     permissions: dict = field(default_factory=dict)
     killswitch: bool = False  # True = Aero takes no actions at all (panic off)
+    # -- Body / robot profile (AERO-BODY-804) -----------------------------
+    # When Aero runs as a physical robot. Keys: enabled(bool), platform(auto|pi),
+    # hardware({leds,servos,display_face}). Empty -> desktop (no body).
+    robot: dict = field(default_factory=dict)
 
 
 # Personality dials with safe, conservative defaults. Numeric dials are 0..1;
