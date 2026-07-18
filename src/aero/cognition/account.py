@@ -129,3 +129,52 @@ class AccountLogin:
                 "key_preview": key[:6] + "…" if len(key) > 6 else "set",
                 "hint": None if stored else
                 "no keyring backend — set an env var instead"}
+
+
+def interactive_login(provider_id: str, *, port: int = 8385,
+                      open_browser: bool = True, timeout: float = 300.0) -> dict:
+    """Run a full OAuth-PKCE login from the terminal: open the browser to the
+    auth URL, catch the callback code on a one-shot localhost server, exchange it
+    for a key, and store it. Best-effort — on a headless box it prints the URL to
+    open manually. (Interactive glue over the tested start()/complete().)"""
+    import http.server
+    import threading
+    import webbrowser
+
+    login = AccountLogin(provider_id)
+    callback = f"http://localhost:{port}/callback"
+    start = login.start(callback_url=callback)
+    if start.method != "pkce":
+        return {"ok": False, "error": f"{provider_id} has no OAuth login",
+                "instructions": start.instructions, "url": start.url}
+
+    captured: dict[str, str] = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            from urllib.parse import parse_qs, urlparse
+            qs = parse_qs(urlparse(self.path).query)
+            captured["code"] = (qs.get("code") or [""])[0]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<h2>Aero: login received. You can close this tab.</h2>")
+
+        def log_message(self, *a):  # silence
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", port), Handler)
+    server.timeout = timeout
+    print(f"Opening {provider_id} login… if the browser doesn't open, visit:\n{start.url}")
+    if open_browser:
+        try:
+            webbrowser.open(start.url)
+        except Exception:
+            pass
+    t = threading.Thread(target=server.handle_request, daemon=True)
+    t.start()
+    t.join(timeout)
+    server.server_close()
+    if not captured.get("code"):
+        return {"ok": False, "error": "timed out waiting for the login callback"}
+    return login.complete(captured["code"], start.verifier)

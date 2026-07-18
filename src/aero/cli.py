@@ -306,6 +306,43 @@ def cmd_brain(cfg: Config, args) -> int:
     cur = st.load(cfg)
     changed = False
 
+    # -- connect any AI: providers / discover / login ----------------------
+    if getattr(args, "providers", False):
+        from aero.cognition.providers import PROVIDERS
+        from aero.cognition.registry import registry as _registry
+        _reg = _registry(cur.brains)
+        print("Providers (connect any AI — local needs nothing, cloud needs a key or login):")
+        for pid, prov in PROVIDERS.items():
+            prof = _reg.get(pid)
+            model = prof.model if prof else ""
+            auth = {"none": "local", "key": "API key", "oauth": "login"}[prov.auth]
+            agg = " [aggregator: many models]" if prov.aggregator else ""
+            print(f"  {pid:<11} {prov.kind:<6} {auth:<8} {model:<22}{agg}")
+        print("\nLocal: aero brain --discover   Cloud key: aero brain --set-key <p> <key>")
+        print("Login: aero brain --login openrouter")
+        return 0
+    if getattr(args, "discover", False):
+        from aero.cognition.discovery import discover_local
+        print("Local model servers:")
+        for d in discover_local():
+            state = "RUNNING" if d["running"] else "not running"
+            models = f" — {', '.join(d['models'][:4])}" if d["models"] else ""
+            print(f"  {d['id']:<11} {state:<12} {d['url']}{models}")
+        return 0
+    if getattr(args, "login", None):
+        from aero.cognition.account import AccountLogin, interactive_login
+        pid = args.login
+        start = AccountLogin(pid).start()
+        if start.method == "pkce":
+            res = interactive_login(pid)
+            print(f"Login {'succeeded' if res.get('ok') else 'failed'}: "
+                  f"{res.get('key_preview') or res.get('error')}")
+            return 0 if res.get("ok") else 1
+        print(f"{pid}: {start.instructions}")
+        if start.url:
+            print(f"  {start.url}")
+        return 0
+
     # -- key vault ---------------------------------------------------------
     if getattr(args, "set_key", None):
         pid, key = args.set_key
@@ -761,6 +798,13 @@ def build_parser() -> argparse.ArgumentParser:
     br.add_argument("--set-key", nargs=2, metavar=("PROFILE", "KEY"),
                     help="store an API key for a profile in the OS keyring")
     br.add_argument("--del-key", metavar="PROFILE", help="remove a stored API key")
+    # Connect any AI (AERO-BRAIN-305)
+    br.add_argument("--providers", action="store_true",
+                    help="list the provider catalog (local + cloud, key vs login)")
+    br.add_argument("--discover", action="store_true",
+                    help="find local model servers that are running right now")
+    br.add_argument("--login", metavar="PROVIDER",
+                    help="log in to a provider (OAuth where supported, e.g. openrouter)")
     ctl = sub.add_parser("control", help="call the control plane (Control-App API)")
     ctl.add_argument("op", nargs="?", help="operation, e.g. status / brain.list "
                      "/ memory.list (omit or 'ops' to list all)")

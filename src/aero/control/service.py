@@ -49,6 +49,10 @@ class ControlService:
             "brain.router": self._brain_router,
             "brain.set_key": self._brain_set_key,
             "brain.del_key": self._brain_del_key,
+            "brain.providers": self._brain_providers,
+            "brain.discover": self._brain_discover,
+            "brain.login_start": self._brain_login_start,
+            "brain.login_complete": self._brain_login_complete,
             "voice.list": self._voice_list,
             "voice.catalog": self._voice_catalog,
             "voice.get": self._voice_get,
@@ -221,6 +225,38 @@ class ControlService:
     def _brain_del_key(self, p: dict) -> dict:
         from aero.cognition import keys as _keys
         return {"deleted": _keys.delete_key(_require(p, "profile"))}
+
+    def _brain_providers(self, p: dict) -> dict:
+        """The connect-any-AI catalog: each provider with kind/auth + whether a
+        key is already set (AERO-BRAIN-305)."""
+        from aero.cognition import keys as _keys
+        from aero.cognition.providers import PROVIDERS
+        from aero.cognition.registry import registry
+        reg = registry(self._settings().brains)
+        out = []
+        for pid, prov in PROVIDERS.items():
+            prof = reg.get(pid)
+            key_set = prov.auth == "none" or (
+                prof is not None and _keys.resolve_key(prof) is not None)
+            out.append({**prov.to_dict(),
+                        "model": prof.model if prof else "",
+                        "key_set": key_set})
+        return {"providers": out}
+
+    def _brain_discover(self, p: dict) -> dict:
+        from aero.cognition.discovery import discover_local
+        return {"local": discover_local()}
+
+    def _brain_login_start(self, p: dict) -> dict:
+        from aero.cognition.account import AccountLogin
+        return AccountLogin(_require(p, "provider")).start(
+            callback_url=p.get("callback_url", "http://localhost:8385/callback")
+        ).to_dict()
+
+    def _brain_login_complete(self, p: dict) -> dict:
+        from aero.cognition.account import AccountLogin
+        return AccountLogin(_require(p, "provider")).complete(
+            _require(p, "code"), _require(p, "verifier"))
 
     # -- voice manager -----------------------------------------------------
     def _voice_list(self, p: dict) -> dict:
