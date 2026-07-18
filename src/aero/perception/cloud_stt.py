@@ -123,9 +123,62 @@ class SarvamSTT(STTService):
         return bool(self.api_key)
 
 
+class GoogleSTT(STTService):
+    """Google Cloud Speech-to-Text. Auth via X-goog-api-key header; sends the
+    WAV's raw PCM as LINEAR16 with its true sample rate."""
+
+    model_name = "google-stt"
+
+    def __init__(self, api_key=None, *, language="en-US",
+                 base_url="https://speech.googleapis.com/v1", timeout: float = 60.0):
+        self.api_key = api_key
+        self.language = language
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+    def _send(self, url: str, headers: dict, data: bytes) -> dict:
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    def _pcm_and_rate(self, audio_path: str) -> tuple[bytes, int]:
+        try:
+            import wave
+            with wave.open(audio_path, "rb") as w:
+                return w.readframes(w.getnframes()), w.getframerate()
+        except Exception:
+            return Path(audio_path).read_bytes(), 16000
+
+    def transcribe(self, audio_path: str, *, language: str | None = None) -> Transcript:
+        import base64
+        if not self.api_key:
+            return Transcript(text="", language=language)
+        pcm, rate = self._pcm_and_rate(audio_path)
+        url = f"{self.base_url}/speech:recognize"
+        headers = {"X-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        body = json.dumps({
+            "config": {"encoding": "LINEAR16", "sampleRateHertz": rate,
+                       "languageCode": language or self.language},
+            "audio": {"content": base64.b64encode(pcm).decode("ascii")},
+        }).encode("utf-8")
+        t0 = time.perf_counter()
+        raw = self._send(url, headers, body)
+        alt = (raw.get("results", [{}])[0].get("alternatives", [{}])[0]
+               if raw.get("results") else {})
+        return Transcript(text=alt.get("transcript", "") or "",
+                          language=language or self.language,
+                          seconds_audio=_audio_seconds(audio_path),
+                          seconds_compute=time.perf_counter() - t0)
+
+    def health_check(self) -> bool:
+        return bool(self.api_key)
+
+
 def build_cloud_stt(backend: str, api_key: str | None):
     if backend == "deepgram":
         return DeepgramSTT(api_key)
     if backend == "sarvam":
         return SarvamSTT(api_key)
+    if backend == "google":
+        return GoogleSTT(api_key)
     raise ValueError(f"unknown cloud STT backend: {backend}")

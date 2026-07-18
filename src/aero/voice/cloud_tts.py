@@ -168,6 +168,35 @@ class CartesiaTTS(_CloudTTS):
         return self._send(url, headers, body)     # WAV bytes
 
 
+class GoogleTTS(_CloudTTS):
+    """Google Cloud Text-to-Speech (Neural2/WaveNet). Auth via the X-goog-api-key
+    header (no key in the URL). LINEAR16 audio, wrapped to WAV if needed."""
+
+    def __init__(self, api_key=None, *, voice="en-US-Neural2-D", language="en-US",
+                 base_url="https://texttospeech.googleapis.com/v1", rate=16000):
+        super().__init__(api_key, voice)
+        self.voice = voice
+        self.language = language
+        self.base_url = base_url.rstrip("/")
+        self.rate = rate
+
+    def _audio_for(self, text: str) -> bytes:
+        url = f"{self.base_url}/text:synthesize"
+        headers = {"X-goog-api-key": self.api_key, "Content-Type": "application/json"}
+        body = json.dumps({
+            "input": {"text": text},
+            "voice": {"languageCode": self.language, "name": self.voice},
+            "audioConfig": {"audioEncoding": "LINEAR16", "sampleRateHertz": self.rate},
+        }).encode("utf-8")
+        raw = json.loads(self._send(url, headers, body).decode("utf-8"))
+        content = raw.get("audioContent")
+        if not content:
+            raise RuntimeError(f"google tts returned no audio: {raw}")
+        audio = base64.b64decode(content)
+        # LINEAR16 comes back as a WAV (RIFF) already; wrap only if it's bare PCM.
+        return audio if audio[:4] == b"RIFF" else _pcm16_to_wav(audio, self.rate)
+
+
 def build_cloud_tts(backend: str, api_key: str | None, *, voice: str | None = None):
     """Construct a cloud TTS adapter by catalog backend key."""
     if backend == "elevenlabs":
@@ -176,4 +205,6 @@ def build_cloud_tts(backend: str, api_key: str | None, *, voice: str | None = No
         return SarvamTTS(api_key, **({"speaker": voice} if voice else {}))
     if backend == "cartesia":
         return CartesiaTTS(api_key, **({"voice_id": voice} if voice else {}))
+    if backend == "google":
+        return GoogleTTS(api_key, **({"voice": voice} if voice else {}))
     raise ValueError(f"unknown cloud TTS backend: {backend}")

@@ -78,6 +78,10 @@ _TTS: tuple[VoiceProfile, ...] = (
     VoiceProfile(id="cartesia", role="tts", backend="cartesia", cost_tier="paid",
                  streaming=True, key_env="CARTESIA_API_KEY",
                  label="Cartesia Sonic — very low latency streaming"),
+    VoiceProfile(id="google_tts", role="tts", backend="google", cost_tier="paid",
+                 languages=("en", "hi", "mr", "ta", "te", "bn"),
+                 key_env="GOOGLE_API_KEY", default_model="en-US-Neural2-D",
+                 label="Google Cloud TTS — Neural2/WaveNet, 50+ languages"),
 )
 
 _STT: tuple[VoiceProfile, ...] = (
@@ -103,6 +107,10 @@ _STT: tuple[VoiceProfile, ...] = (
     VoiceProfile(id="deepgram", role="stt", backend="deepgram", cost_tier="paid",
                  streaming=True, key_env="DEEPGRAM_API_KEY",
                  label="Deepgram Nova — fast streaming STT"),
+    VoiceProfile(id="google_stt", role="stt", backend="google", cost_tier="paid",
+                 languages=("en", "hi", "mr", "ta", "te", "bn"),
+                 key_env="GOOGLE_API_KEY",
+                 label="Google Cloud STT — 125+ languages"),
 )
 
 BUILTIN_TTS: dict[str, VoiceProfile] = {p.id: p for p in _TTS}

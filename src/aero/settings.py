@@ -165,8 +165,8 @@ def _construct_tts(backend: str, s: VoiceSettings):
     return SapiTTS()
 
 
-_CLOUD_TTS = ("elevenlabs", "sarvam", "cartesia")
-_CLOUD_STT = ("deepgram", "sarvam")
+_CLOUD_TTS = ("elevenlabs", "sarvam", "cartesia", "google")
+_CLOUD_STT = ("deepgram", "sarvam", "google")
 
 
 def build_tts(cfg: Config | None = None):

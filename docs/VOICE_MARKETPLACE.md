@@ -102,8 +102,13 @@ aero voices --engine … / aero voice --model deepgram
 | ElevenLabs TTS | `/v1/text-to-speech` (PCM → WAV) | `ELEVENLABS_API_KEY` |
 | Sarvam TTS (Bulbul) | `/text-to-speech` (base64 WAV) | `SARVAM_API_KEY` |
 | Cartesia TTS (Sonic) | `/tts/bytes` (WAV) | `CARTESIA_API_KEY` |
+| Google Cloud TTS | `/v1/text:synthesize` (Neural2/WaveNet) | `GOOGLE_API_KEY` |
 | Deepgram STT (Nova) | `/v1/listen` | `DEEPGRAM_API_KEY` |
 | Sarvam STT (Saaras) | `/speech-to-text-translate` | `SARVAM_API_KEY` |
+| Google Cloud STT | `/v1/speech:recognize` | `GOOGLE_API_KEY` |
+
+Google auth uses the `X-goog-api-key` header (no key in the URL); one `GOOGLE_API_KEY`
+covers both Google voice engines.
 
 Each is behind the fallback chain, so no key → degrades to a local engine.
 **Written to each API's documented shape and unit-tested, but not yet run against
