@@ -165,14 +165,23 @@ def _construct_tts(backend: str, s: VoiceSettings):
     return SapiTTS()
 
 
+_CLOUD_TTS = ("elevenlabs", "sarvam", "cartesia")
+_CLOUD_STT = ("deepgram", "sarvam")
+
+
 def build_tts(cfg: Config | None = None):
     """Construct the TTS engine the user selected, resolved through the voice
     catalog (M11): ``s.engine`` is a catalog id -> its backend -> the engine.
+    Cloud backends (ElevenLabs/Sarvam/Cartesia) get a key from the voice keyring.
     Unknown ids fall through to the id-as-backend (back-compat)."""
     from aero.voice.catalog import registry as _vreg
     s = load(cfg)
     prof = _vreg(s.voice_engines).get(s.engine)
     backend = prof.backend if prof else s.engine
+    if prof is not None and prof.role == "tts" and backend in _CLOUD_TTS:
+        from aero.cognition.keys import resolve_voice_key
+        from aero.voice.cloud_tts import build_cloud_tts
+        return build_cloud_tts(backend, resolve_voice_key(prof))
     return _construct_tts(backend, s)
 
 
@@ -197,7 +206,12 @@ def build_stt(cfg: Config | None = None, *, model: str | None = None):
     s = load(cfg)
     choice = model or s.stt_model
     prof = _vreg(s.voice_engines).get(choice)
-    return _build(prof.backend if prof else choice)
+    backend = prof.backend if prof else choice
+    if prof is not None and prof.role == "stt" and backend in _CLOUD_STT:
+        from aero.cognition.keys import resolve_voice_key
+        from aero.perception.cloud_stt import build_cloud_stt
+        return build_cloud_stt(backend, resolve_voice_key(prof))
+    return _build(backend)
 
 
 def resolve_brain_profile(s: VoiceSettings, which: str | None = None):

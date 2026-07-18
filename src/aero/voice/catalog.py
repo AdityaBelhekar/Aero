@@ -13,9 +13,10 @@ on emotion, and which env var / keyring entry holds its key. Local engines are
 private and free; cloud engines need a key and leave the device.
 
 This module is metadata only — constructing an engine lives in the builders
-(settings.build_tts / build_stt), which look profiles up here. Cloud entries whose
-backend isn't written yet are listed with ``implemented=False`` so the UI can show
-the full marketplace and say honestly "adapter not built".
+(settings.build_tts / build_stt), which look profiles up here. The cloud adapters
+(ElevenLabs/Sarvam/Cartesia TTS, Deepgram/Sarvam STT) are now implemented; a future
+catalogued engine can still ship as ``implemented=False`` to appear in the
+marketplace before its adapter is written.
 """
 
 from __future__ import annotations
@@ -47,9 +48,9 @@ class VoiceProfile:
 
 
 # -- Built-in catalog ------------------------------------------------------
-# Local first (free, private, no key), then cloud (paid, needs a key). Cloud
-# entries without an adapter yet are implemented=False — shown in the marketplace,
-# not yet selectable.
+# Local first (free, private, no key), then cloud (paid, needs a key). All the
+# cloud engines below have working adapters; a not-yet-built one would carry
+# implemented=False to show in the marketplace without being selectable.
 _TTS: tuple[VoiceProfile, ...] = (
     VoiceProfile(id="kokoro", role="tts", backend="kokoro", cost_tier="free-local",
                  local=True, streaming=False, languages=("en",),
@@ -69,14 +70,13 @@ _TTS: tuple[VoiceProfile, ...] = (
     # -- cloud (need a key; leave the device) --
     VoiceProfile(id="elevenlabs", role="tts", backend="elevenlabs", cost_tier="paid",
                  streaming=True, emotion=True, key_env="ELEVENLABS_API_KEY",
-                 implemented=False,
                  label="ElevenLabs — top quality, streaming, emotion (English-first)"),
     VoiceProfile(id="sarvam_tts", role="tts", backend="sarvam", cost_tier="paid",
                  streaming=True, emotion=True, languages=("hi", "mr", "en", "ta"),
-                 key_env="SARVAM_API_KEY", implemented=False,
+                 key_env="SARVAM_API_KEY",
                  label="Sarvam Bulbul — Indic-native, code-switch, streaming"),
     VoiceProfile(id="cartesia", role="tts", backend="cartesia", cost_tier="paid",
-                 streaming=True, key_env="CARTESIA_API_KEY", implemented=False,
+                 streaming=True, key_env="CARTESIA_API_KEY",
                  label="Cartesia Sonic — very low latency streaming"),
 )
 
@@ -98,10 +98,10 @@ _STT: tuple[VoiceProfile, ...] = (
     # -- cloud --
     VoiceProfile(id="sarvam_stt", role="stt", backend="sarvam", cost_tier="paid",
                  streaming=True, languages=("hi", "mr", "en"),
-                 key_env="SARVAM_API_KEY", implemented=False,
+                 key_env="SARVAM_API_KEY",
                  label="Sarvam Saaras — best code-switch STT (cloud)"),
     VoiceProfile(id="deepgram", role="stt", backend="deepgram", cost_tier="paid",
-                 streaming=True, key_env="DEEPGRAM_API_KEY", implemented=False,
+                 streaming=True, key_env="DEEPGRAM_API_KEY",
                  label="Deepgram Nova — fast streaming STT"),
 )
 

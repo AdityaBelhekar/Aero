@@ -85,9 +85,28 @@ always-available default.
 engines: ElevenLabs, Svara) and the *face* (via `presence/emotion.py`), so what
 Aero says, how he says it, and how he looks all move together.
 
-## What's next
+## Cloud adapters (built)
 
-The cloud adapters (`elevenlabs`, `sarvam`, `deepgram`, `cartesia`) are catalogued
-but not written — each is one new backend implementing `TTSService`/`STTService`,
-exactly like the local ones. Bias per the plan: **Sarvam first** (Indic-native,
-fits Aero's code-switch identity).
+All cloud engines now have working adapters — just add a key:
+
+```
+# TTS
+aero brain --set-key elevenlabs <key>   # (voice keys share the aero-voice keyring)
+aero voices --engine elevenlabs
+# STT
+aero voices --engine … / aero voice --model deepgram
+```
+
+| Engine | Endpoint | Key |
+|---|---|---|
+| ElevenLabs TTS | `/v1/text-to-speech` (PCM → WAV) | `ELEVENLABS_API_KEY` |
+| Sarvam TTS (Bulbul) | `/text-to-speech` (base64 WAV) | `SARVAM_API_KEY` |
+| Cartesia TTS (Sonic) | `/tts/bytes` (WAV) | `CARTESIA_API_KEY` |
+| Deepgram STT (Nova) | `/v1/listen` | `DEEPGRAM_API_KEY` |
+| Sarvam STT (Saaras) | `/speech-to-text-translate` | `SARVAM_API_KEY` |
+
+Each is behind the fallback chain, so no key → degrades to a local engine.
+**Written to each API's documented shape and unit-tested, but not yet run against
+the live services** — one real key + call per engine is the remaining verification
+(same status as the cloud brains). Store cloud voice keys with
+`aero.cognition.keys.set_voice_key(<engine>, <key>)` or the env var above.

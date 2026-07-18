@@ -43,12 +43,12 @@ def test_catalog_filters_by_role():
     assert {p.id for p in tts} & {p.id for p in stt} == set()
 
 
-def test_implemented_only_hides_unbuilt_adapters():
-    all_tts = {p.id for p in catalog("tts")}
+def test_cloud_engines_now_implemented():
+    # the cloud adapters are built now -> all catalogued engines are selectable
     built_tts = {p.id for p in catalog("tts", implemented_only=True)}
-    assert "elevenlabs" in all_tts               # listed in the marketplace
-    assert "elevenlabs" not in built_tts         # but not yet selectable
-    assert "kokoro" in built_tts
+    built_stt = {p.id for p in catalog("stt", implemented_only=True)}
+    assert {"elevenlabs", "sarvam_tts", "cartesia", "kokoro"} <= built_tts
+    assert {"deepgram", "sarvam_stt", "whisper-small"} <= built_stt
 
 
 def test_custom_profile_overrides_builtin():

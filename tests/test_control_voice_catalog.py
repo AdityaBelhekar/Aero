@@ -27,7 +27,7 @@ def test_voice_catalog_local_ready_cloud_needs_key(tmp_path, monkeypatch):
     by_id = {e["id"]: e for e in cat["tts"]}
     assert by_id["kokoro"]["key_set"] is True      # local -> ready
     assert by_id["elevenlabs"]["key_set"] is False  # cloud, no key
-    assert by_id["elevenlabs"]["implemented"] is False
+    assert by_id["elevenlabs"]["implemented"] is True   # adapter now built
 
 
 def test_voice_catalog_reflects_selection(tmp_path):
