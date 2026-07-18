@@ -318,8 +318,13 @@ def cmd_brain(cfg: Config, args) -> int:
             auth = {"none": "local", "key": "API key", "oauth": "login"}[prov.auth]
             agg = " [aggregator: many models]" if prov.aggregator else ""
             print(f"  {pid:<11} {prov.kind:<6} {auth:<8} {model:<22}{agg}")
+        from aero.cognition.providers import openrouter_popular
+        print("\nLogin once → ALL the big models (via OpenRouter): "
+              + ", ".join(openrouter_popular()))
+        print("  aero brain --login openrouter   then: aero brain --set openrouter "
+              "--model anthropic/claude-3.5-sonnet")
         print("\nLocal: aero brain --discover   Cloud key: aero brain --set-key <p> <key>")
-        print("Login: aero brain --login openrouter")
+        print("Logins: openrouter (any model) · huggingface · github")
         return 0
     if getattr(args, "discover", False):
         from aero.cognition.discovery import discover_local

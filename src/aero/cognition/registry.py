@@ -157,6 +157,44 @@ _BUILTINS: tuple[BrainProfile, ...] = (
         base_url="https://api.fireworks.ai/inference/v1", key_env="FIREWORKS_API_KEY",
         cost_tier="paid", label="Fireworks AI — fast open-model inference",
     ),
+    # -- big-name direct APIs (OpenAI-compatible endpoints; API key) --
+    BrainProfile(
+        id="anthropic", adapter="openai", model="claude-3-5-sonnet-latest",
+        base_url="https://api.anthropic.com/v1", key_env="ANTHROPIC_API_KEY",
+        cost_tier="paid", supports_vision=True,
+        label="Anthropic Claude — direct API (also via OpenRouter login)",
+    ),
+    BrainProfile(
+        id="kimi", adapter="openai", model="moonshot-v1-32k",
+        base_url="https://api.moonshot.ai/v1", key_env="MOONSHOT_API_KEY",
+        cost_tier="paid", label="Moonshot Kimi — long-context, strong",
+    ),
+    BrainProfile(
+        id="cohere", adapter="openai", model="command-r-plus",
+        base_url="https://api.cohere.ai/compatibility/v1", key_env="COHERE_API_KEY",
+        cost_tier="paid", label="Cohere Command — RAG-friendly",
+    ),
+    BrainProfile(
+        id="perplexity", adapter="openai", model="sonar",
+        base_url="https://api.perplexity.ai", key_env="PERPLEXITY_API_KEY",
+        cost_tier="paid", label="Perplexity Sonar — web-grounded answers",
+    ),
+    BrainProfile(
+        id="cerebras", adapter="openai", model="llama-3.3-70b",
+        base_url="https://api.cerebras.ai/v1", key_env="CEREBRAS_API_KEY",
+        cost_tier="free-cloud", label="Cerebras — extremely fast inference",
+    ),
+    BrainProfile(
+        id="qwen", adapter="openai", model="qwen-max",
+        base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        key_env="DASHSCOPE_API_KEY", cost_tier="paid",
+        label="Alibaba Qwen (DashScope) — strong multilingual",
+    ),
+    BrainProfile(
+        id="nvidia", adapter="openai", model="meta/llama-3.3-70b-instruct",
+        base_url="https://integrate.api.nvidia.com/v1", key_env="NVIDIA_API_KEY",
+        cost_tier="free-cloud", label="NVIDIA NIM — many hosted open models",
+    ),
     # -- cloud via OAuth login (sign in with your account) --
     BrainProfile(
         id="huggingface", adapter="openai", model="meta-llama/Llama-3.3-70B-Instruct",

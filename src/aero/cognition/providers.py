@@ -64,6 +64,17 @@ _PROVIDERS: tuple[Provider, ...] = (
     Provider("xai", "cloud", "key", signup_url="https://console.x.ai"),
     Provider("fireworks", "cloud", "key",
              signup_url="https://fireworks.ai/account/api-keys"),
+    Provider("anthropic", "cloud", "key",
+             signup_url="https://console.anthropic.com/settings/keys"),
+    Provider("kimi", "cloud", "key",
+             signup_url="https://platform.moonshot.ai/console/api-keys"),
+    Provider("cohere", "cloud", "key", signup_url="https://dashboard.cohere.com/api-keys"),
+    Provider("perplexity", "cloud", "key",
+             signup_url="https://www.perplexity.ai/settings/api"),
+    Provider("cerebras", "cloud", "key", signup_url="https://cloud.cerebras.ai"),
+    Provider("qwen", "cloud", "key",
+             signup_url="https://bailian.console.alibabacloud.com"),
+    Provider("nvidia", "cloud", "key", signup_url="https://build.nvidia.com"),
     # -- cloud via OAuth login (sign in with your account) --
     Provider("openrouter", "cloud", "oauth", aggregator=True,
              signup_url="https://openrouter.ai/keys",
@@ -119,3 +130,25 @@ def cloud_ids() -> list[str]:
 
 def oauth_ids() -> list[str]:
     return [p.id for p in _PROVIDERS if p.auth == "oauth"]
+
+
+# The point of the OpenRouter *login*: one sign-in reaches all the big models,
+# including the ones (Claude, GPT, Grok) whose own APIs are key-only and whose
+# subscriptions can't be used directly. These are OpenRouter model ids.
+OPENROUTER_POPULAR: dict[str, str] = {
+    "claude": "anthropic/claude-3.5-sonnet",
+    "chatgpt": "openai/gpt-4o",
+    "grok": "x-ai/grok-2",
+    "gemini": "google/gemini-2.0-flash-001",
+    "deepseek": "deepseek/deepseek-chat",
+    "kimi": "moonshotai/kimi-k2",
+    "llama": "meta-llama/llama-3.3-70b-instruct",
+    "qwen": "qwen/qwen-2.5-72b-instruct",
+    "mistral": "mistralai/mistral-large",
+}
+
+
+def openrouter_popular() -> dict[str, str]:
+    """Popular models reachable through the single OpenRouter login (name -> id).
+    Use with: aero brain --set openrouter --model <id>."""
+    return dict(OPENROUTER_POPULAR)
