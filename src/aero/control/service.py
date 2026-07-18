@@ -71,6 +71,9 @@ class ControlService:
             "play.games": self._play_games,
             "play.status": self._play_status,
             "play.act": self._play_act,
+            "body.status": self._body_status,
+            "body.service": self._body_service,
+            "body.pi_preset": self._body_pi_preset,
         }
         self._hands = None
         self._eyes = None
@@ -455,6 +458,24 @@ class ControlService:
         sess = GameSession(MinecraftConnector(), cfg=self.cfg)
         result = sess.act(GameAction(_require(p, "kind"), p.get("args") or {}))
         return result.to_dict()
+
+    # -- body / robot (AERO-BODY-8xx) --------------------------------------
+    def _body_status(self, p: dict) -> dict:
+        from aero.body.robot import robot_status
+        return robot_status(self.cfg)
+
+    def _body_service(self, p: dict) -> dict:
+        from aero.body.robot import systemd_unit
+        return {"unit": systemd_unit(aero_home=p.get("aero_home") or str(self.cfg.home))}
+
+    def _body_pi_preset(self, p: dict) -> dict:
+        from aero.body.robot import apply_pi_brain_preset
+        s = self._settings()
+        apply_pi_brain_preset(s)
+        st.save(s, self.cfg)
+        return {"reflex": s.reflex_profile, "primary": s.primary_profile,
+                "note": "Pi two-speed router: local reflex + LAN/cloud chat "
+                        "(point the litellm profile at your brain host)"}
 
     def _memory_delete(self, p: dict) -> dict:
         # Soft delete (tombstone) so provenance survives and it's reversible; a

@@ -521,6 +521,38 @@ def cmd_play(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_body(cfg: Config, args) -> int:
+    """Body (M15): host/robot status, the autostart service unit, or the Pi brain
+    preset."""
+    from aero.control.service import ControlService
+    svc = ControlService(cfg)
+
+    if args.body_cmd == "install-service":
+        print(svc.dispatch("body.service")["result"]["unit"], end="")
+        return 0
+
+    if args.body_cmd == "pi-preset":
+        r = svc.dispatch("body.pi_preset")["result"]
+        print(f"Pi brain preset applied: chat={r['primary']}  reflex={r['reflex']}")
+        print(f"  {r['note']}")
+        return 0
+
+    # default: status
+    s = svc.dispatch("body.status")["result"]
+    h = s["host"]
+    print(f"Host: {h['kind']}  ({h['os']}/{h['arch']}, "
+          f"display={'yes' if h['has_display'] else 'no'})")
+    print(f"  default TTS: {h['default_tts']}  window-sensing: "
+          f"{'yes' if h['can_sense_windows'] else 'no'}")
+    r = s["robot"]
+    print(f"Robot mode: {'ON' if r['enabled'] else 'off'} (platform={r['platform']})")
+    print(f"  hardware available: {'yes' if s['hardware_available'] else 'no'}  "
+          f"caps={s['hardware_caps']}")
+    print("\nAutostart:  aero body install-service > ~/.config/systemd/user/aero.service")
+    print("Pi brain:   aero body pi-preset   (local reflex + LAN/cloud chat)")
+    return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -764,6 +796,11 @@ def build_parser() -> argparse.ArgumentParser:
     pact.add_argument("kind", help="action, e.g. say / mine / follow")
     pact.add_argument("args", nargs="?", help="JSON args, e.g. '{\"text\":\"hi\"}'")
     pact.add_argument("--game", default="minecraft")
+    bd = sub.add_parser("body", help="Body (M15): host/robot status, autostart, Pi preset")
+    bdsub = bd.add_subparsers(dest="body_cmd")
+    bdsub.add_parser("status", help="host + robot + hardware status")
+    bdsub.add_parser("install-service", help="print a systemd autostart unit")
+    bdsub.add_parser("pi-preset", help="apply the Pi brain routing preset")
     return p
 
 
@@ -786,6 +823,7 @@ _HANDLERS = {
     "hands": cmd_hands,
     "eyes": cmd_eyes,
     "play": cmd_play,
+    "body": cmd_body,
 }
 
 
