@@ -24,6 +24,7 @@ from aero.play.connector import (
     GameState,
     PlayVerdict,
     game_policy,
+    known_games,
 )
 
 __all__ = [
@@ -34,4 +35,5 @@ __all__ = [
     "GameState",
     "PlayVerdict",
     "game_policy",
+    "known_games",
 ]

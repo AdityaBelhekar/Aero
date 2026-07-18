@@ -85,6 +85,11 @@ def game_policy(game: str) -> GamePolicy:
                                     "unknown game — spectate-only by default"))
 
 
+def known_games() -> list[GamePolicy]:
+    """All games with an explicit policy (for the Control App / `aero play`)."""
+    return list(_POLICIES.values())
+
+
 class GameConnector(ABC):
     game: str
 

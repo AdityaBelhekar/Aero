@@ -52,14 +52,20 @@ class SocketBotTransport(BotTransport):
 
     def request(self, op: str, params: dict | None = None) -> dict:
         line = json.dumps({"op": op, "params": params or {}}) + "\n"
-        with socket.create_connection((self.host, self.port), timeout=self.timeout) as s:
-            s.sendall(line.encode("utf-8"))
-            buf = b""
-            while b"\n" not in buf:
-                chunk = s.recv(65536)
-                if not chunk:
-                    break
-                buf += chunk
+        try:
+            with socket.create_connection((self.host, self.port),
+                                          timeout=self.timeout) as s:
+                s.sendall(line.encode("utf-8"))
+                buf = b""
+                while b"\n" not in buf:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+        except OSError as e:
+            # bridge not running / unreachable -> a clean result, never a raise
+            return {"ok": False, "error": f"minecraft bridge unreachable: {e}",
+                    "connected": False}
         raw = buf.split(b"\n", 1)[0]
         return json.loads(raw.decode("utf-8")) if raw else {}
 

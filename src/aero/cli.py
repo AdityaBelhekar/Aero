@@ -483,6 +483,44 @@ def cmd_eyes(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_play(cfg: Config, args) -> int:
+    """Play (M14): list games + their play/spectate policy, check status, or send
+    a gated action to the Minecraft bridge."""
+    import json as _json
+
+    from aero.control.service import ControlService
+    svc = ControlService(cfg)
+
+    if args.play_cmd in (None, "games"):
+        games = svc.dispatch("play.games")["result"]["games"]
+        print("Games (mode is the anti-cheat boundary; spectate = watch only):")
+        for g in games:
+            print(f"  {g['game']:<12} {g['mode']:<9} {g['note']}")
+        return 0
+
+    if args.play_cmd == "status":
+        s = svc.dispatch("play.status", {"game": args.game})["result"]
+        print(f"{s['game']}: mode={s['mode']} ({s['note']})")
+        print(f"  games grant: {'yes' if s['games_granted'] else 'NO'}  "
+              f"kill switch: {'ON' if s['killswitch'] else 'off'}")
+        if "bridge_available" in s:
+            print(f"  minecraft bridge: "
+                  f"{'reachable' if s['bridge_available'] else 'not running (see docs/PLAY_SETUP.md)'}")
+        return 0
+
+    if args.play_cmd == "act":
+        params = _json.loads(args.args) if args.args else {}
+        resp = svc.dispatch("play.act", {"game": args.game, "kind": args.kind,
+                                         "args": params})
+        if not resp.get("ok"):
+            print(f"error: {resp.get('error')}")
+            return 1
+        out = resp["result"]
+        print(_json.dumps(out, indent=2, ensure_ascii=False))
+        return 0 if out.get("verdict") == "ok" else 1
+    return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -717,6 +755,15 @@ def build_parser() -> argparse.ArgumentParser:
     edesc = eysub.add_parser("describe", help="capture + ask a vision brain")
     edesc.add_argument("prompt", nargs="?", help="what to ask about the frame")
     edesc.add_argument("--source", default="screen", choices=["screen", "camera"])
+    pl = sub.add_parser("play", help="Play (M14): games, status, gated actions")
+    plsub = pl.add_subparsers(dest="play_cmd")
+    plsub.add_parser("games", help="list games + play/spectate policy")
+    pst = plsub.add_parser("status", help="policy + grant + bridge status for a game")
+    pst.add_argument("game", nargs="?", default="minecraft")
+    pact = plsub.add_parser("act", help="send a gated action (minecraft)")
+    pact.add_argument("kind", help="action, e.g. say / mine / follow")
+    pact.add_argument("args", nargs="?", help="JSON args, e.g. '{\"text\":\"hi\"}'")
+    pact.add_argument("--game", default="minecraft")
     return p
 
 
@@ -738,6 +785,7 @@ _HANDLERS = {
     "control": cmd_control,
     "hands": cmd_hands,
     "eyes": cmd_eyes,
+    "play": cmd_play,
 }
 
 

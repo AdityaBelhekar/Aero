@@ -68,6 +68,9 @@ class ControlService:
             "eyes.status": self._eyes_status,
             "eyes.look": self._eyes_look,
             "eyes.describe": self._eyes_describe,
+            "play.games": self._play_games,
+            "play.status": self._play_status,
+            "play.act": self._play_act,
         }
         self._hands = None
         self._eyes = None
@@ -419,6 +422,39 @@ class ControlService:
         answer = VisionRouter(self.cfg).see(
             look.frame, prompt=p.get("prompt", "What's on the screen?"))
         return {"look": look.to_dict(), "vision": answer.to_dict()}
+
+    # -- play / games (AERO-PLAY-7xx) --------------------------------------
+    def _play_games(self, p: dict) -> dict:
+        from aero.play import known_games
+        return {"games": [{"game": g.game, "mode": g.mode.value, "note": g.note,
+                           "can_automate": g.can_automate} for g in known_games()]}
+
+    def _play_status(self, p: dict) -> dict:
+        from aero.play import game_policy
+        game = p.get("game", "minecraft")
+        s = self._settings()
+        pol = game_policy(game)
+        out = {"game": pol.game, "mode": pol.mode.value, "note": pol.note,
+               "can_automate": pol.can_automate,
+               "games_granted": st.permission_granted(s, "games"),
+               "killswitch": s.killswitch}
+        if pol.game == "minecraft":
+            from aero.play.minecraft import MinecraftConnector
+            out["bridge_available"] = MinecraftConnector().available()
+        return out
+
+    def _play_act(self, p: dict) -> dict:
+        from aero.play import GameAction, GameSession
+        from aero.play.minecraft import MinecraftConnector
+        game = p.get("game", "minecraft")
+        if game != "minecraft":
+            # only minecraft has a connector today; others are spectate-only anyway
+            from aero.play import game_policy
+            return {"verdict": "refused_spectate",
+                    "reason": f"{game}: {game_policy(game).note}", "result": None}
+        sess = GameSession(MinecraftConnector(), cfg=self.cfg)
+        result = sess.act(GameAction(_require(p, "kind"), p.get("args") or {}))
+        return result.to_dict()
 
     def _memory_delete(self, p: dict) -> dict:
         # Soft delete (tombstone) so provenance survives and it's reversible; a
