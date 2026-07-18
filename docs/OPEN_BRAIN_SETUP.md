@@ -132,15 +132,33 @@ aero brain --set-key mistral <key>    # stored in the OS keyring
 aero brain --set mistral
 ```
 
-### 3. Login (OAuth) — "log in once → any model"
+### 3. Login (OAuth) — "sign in with your account"
 
-For providers with a real token-issuing flow. **OpenRouter** is the one to know:
-its OAuth-PKCE login hands Aero a genuine API key that reaches hundreds of models:
+Three real "log in with X" options, each issuing a genuine API token Aero stores
+in your keyring:
+
+| Provider | Flow | Setup |
+|---|---|---|
+| **OpenRouter** | PKCE (app-less) | nothing — just `aero brain --login openrouter` |
+| **Hugging Face** | OAuth2 auth-code | register an app, set its client id, then login |
+| **GitHub Models** | device flow | register an app, set its client id, then login |
 
 ```
-aero brain --login openrouter    # opens the browser, captures the code, stores the key
-aero brain --set openrouter
+# OpenRouter — zero setup, hundreds of models
+aero brain --login openrouter
+
+# Hugging Face / GitHub — one-time: create an OAuth app, then:
+aero brain --oauth-client huggingface <client_id>
+aero brain --login huggingface       # opens browser, captures the code, stores the token
+
+aero brain --oauth-client github <client_id>
+aero brain --login github            # shows a code to type at github.com/login/device, polls
 ```
+
+OpenRouter is the easiest (no app to register). Hugging Face and GitHub need *you*
+(the developer shipping Aero) to register an OAuth app once and drop in the
+client id — client ids aren't secret, so they can live in settings. After login,
+`aero brain --set <provider>` to use it.
 
 > **Not supported (on purpose):** using a consumer **ChatGPT / Claude Pro
 > subscription** as an API brain. Those subscriptions are the chat *product*, not

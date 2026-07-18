@@ -48,6 +48,10 @@ class VoiceSettings:
     # Which brain sees images (AERO-VIS-602). Empty -> auto: the active brain if
     # it supports vision, else the first vision-capable profile with a key.
     vision_profile: str = ""
+    # OAuth app client IDs per provider (AERO-BRAIN-305). Providers whose login
+    # needs a registered app (Hugging Face, GitHub) read their client_id here;
+    # OpenRouter's app-less PKCE needs none. Client IDs aren't secret.
+    oauth_client_ids: dict = field(default_factory=dict)
     # Privacy guard: refuse a non-private (cloud) primary and keep everything on
     # the local reflex brain. Off by default so an explicitly-chosen cloud brain
     # still works; on = "personal talk never leaves the device".

@@ -64,16 +64,41 @@ _PROVIDERS: tuple[Provider, ...] = (
     Provider("xai", "cloud", "key", signup_url="https://console.x.ai"),
     Provider("fireworks", "cloud", "key",
              signup_url="https://fireworks.ai/account/api-keys"),
-    # -- cloud via OAuth login (issues a real API key) --
+    # -- cloud via OAuth login (sign in with your account) --
     Provider("openrouter", "cloud", "oauth", aggregator=True,
              signup_url="https://openrouter.ai/keys",
              oauth={
-                 # OpenRouter's PKCE flow: open auth_url, user approves, the
-                 # callback code exchanges at token_url for a real API key.
+                 # OpenRouter's PKCE flow is app-less: no client_id to register.
+                 # Open auth_url, user approves, the callback code exchanges at
+                 # token_url for a real API key.
                  "flow": "pkce",
                  "auth_url": "https://openrouter.ai/auth",
                  "token_url": "https://openrouter.ai/api/v1/auth/keys",
-                 "note": "log in once, use hundreds of models",
+                 "note": "log in once, use hundreds of models — no app to register",
+             }),
+    Provider("huggingface", "cloud", "oauth", aggregator=True,
+             signup_url="https://huggingface.co/settings/applications",
+             oauth={
+                 # Standard OAuth2 auth-code + PKCE. Needs a registered app's
+                 # client_id (set via `aero brain --oauth-client huggingface <id>`).
+                 "flow": "authcode",
+                 "auth_url": "https://huggingface.co/oauth/authorize",
+                 "token_url": "https://huggingface.co/oauth/token",
+                 "scope": "openid inference-api",
+                 "needs_client_id": True,
+                 "note": "sign in with Hugging Face; many open models",
+             }),
+    Provider("github", "cloud", "oauth", aggregator=True,
+             signup_url="https://github.com/settings/developers",
+             oauth={
+                 # GitHub device flow: no callback server; user types a code at a
+                 # URL, Aero polls for the token. Needs an OAuth app client_id.
+                 "flow": "device",
+                 "device_url": "https://github.com/login/device/code",
+                 "token_url": "https://github.com/login/oauth/access_token",
+                 "scope": "read:user",
+                 "needs_client_id": True,
+                 "note": "sign in with GitHub; free GitHub Models tier",
              }),
 )
 

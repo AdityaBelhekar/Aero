@@ -329,14 +329,25 @@ def cmd_brain(cfg: Config, args) -> int:
             models = f" — {', '.join(d['models'][:4])}" if d["models"] else ""
             print(f"  {d['id']:<11} {state:<12} {d['url']}{models}")
         return 0
+    if getattr(args, "oauth_client", None):
+        pid, client_id = args.oauth_client
+        cur.oauth_client_ids = {**(cur.oauth_client_ids or {}), pid: client_id}
+        st.save(cur, cfg)
+        print(f"Set OAuth client id for '{pid}'. Now: aero brain --login {pid}")
+        return 0
     if getattr(args, "login", None):
         from aero.cognition.account import AccountLogin, interactive_login
         pid = args.login
-        start = AccountLogin(pid).start()
-        if start.method == "pkce":
-            res = interactive_login(pid)
+        start = AccountLogin(pid, cfg=cfg).start()
+        if start.error:
+            print(start.error)
+            return 1
+        if start.method in ("pkce", "authcode", "device"):
+            res = interactive_login(pid, cfg=cfg)
             print(f"Login {'succeeded' if res.get('ok') else 'failed'}: "
                   f"{res.get('key_preview') or res.get('error')}")
+            if res.get("ok"):
+                print(f"  Use it:  aero brain --set {pid}")
             return 0 if res.get("ok") else 1
         print(f"{pid}: {start.instructions}")
         if start.url:
@@ -804,7 +815,10 @@ def build_parser() -> argparse.ArgumentParser:
     br.add_argument("--discover", action="store_true",
                     help="find local model servers that are running right now")
     br.add_argument("--login", metavar="PROVIDER",
-                    help="log in to a provider (OAuth where supported, e.g. openrouter)")
+                    help="log in to a provider (OAuth: openrouter/huggingface/github)")
+    br.add_argument("--oauth-client", nargs=2, dest="oauth_client",
+                    metavar=("PROVIDER", "CLIENT_ID"),
+                    help="set a provider's OAuth app client id (huggingface/github)")
     ctl = sub.add_parser("control", help="call the control plane (Control-App API)")
     ctl.add_argument("op", nargs="?", help="operation, e.g. status / brain.list "
                      "/ memory.list (omit or 'ops' to list all)")

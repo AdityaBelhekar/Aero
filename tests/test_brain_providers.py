@@ -60,8 +60,10 @@ def test_openrouter_is_oauth_aggregator():
 
 
 def test_oauth_ids_only_legit_token_issuers():
-    # only providers with a real token-issuing flow; no subscription proxying
-    assert oauth_ids() == ["openrouter"]
+    # providers with a real token-issuing login flow; NO subscription proxying
+    assert set(oauth_ids()) == {"openrouter", "huggingface", "github"}
+    # the ToS-violating ones must never be login providers
+    assert "openai" not in oauth_ids() and "anthropic" not in oauth_ids()
 
 
 def test_key_providers_have_signup_urls():

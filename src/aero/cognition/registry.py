@@ -157,6 +157,19 @@ _BUILTINS: tuple[BrainProfile, ...] = (
         base_url="https://api.fireworks.ai/inference/v1", key_env="FIREWORKS_API_KEY",
         cost_tier="paid", label="Fireworks AI — fast open-model inference",
     ),
+    # -- cloud via OAuth login (sign in with your account) --
+    BrainProfile(
+        id="huggingface", adapter="openai", model="meta-llama/Llama-3.3-70B-Instruct",
+        base_url="https://router.huggingface.co/v1", key_env="HF_TOKEN",
+        cost_tier="freemium",
+        label="Hugging Face — sign in, many open models via the Inference router",
+    ),
+    BrainProfile(
+        id="github", adapter="openai", model="openai/gpt-4o-mini",
+        base_url="https://models.github.ai/inference", key_env="GITHUB_TOKEN",
+        cost_tier="free-cloud",
+        label="GitHub Models — sign in with GitHub, free tier (device login)",
+    ),
 )
 
 BUILTIN_PROFILES: dict[str, BrainProfile] = {p.id: p for p in _BUILTINS}

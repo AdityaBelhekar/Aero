@@ -53,6 +53,8 @@ class ControlService:
             "brain.discover": self._brain_discover,
             "brain.login_start": self._brain_login_start,
             "brain.login_complete": self._brain_login_complete,
+            "brain.login_poll": self._brain_login_poll,
+            "brain.oauth_client": self._brain_oauth_client,
             "voice.list": self._voice_list,
             "voice.catalog": self._voice_catalog,
             "voice.get": self._voice_get,
@@ -249,14 +251,26 @@ class ControlService:
 
     def _brain_login_start(self, p: dict) -> dict:
         from aero.cognition.account import AccountLogin
-        return AccountLogin(_require(p, "provider")).start(
+        return AccountLogin(_require(p, "provider"), cfg=self.cfg).start(
             callback_url=p.get("callback_url", "http://localhost:8385/callback")
         ).to_dict()
 
     def _brain_login_complete(self, p: dict) -> dict:
         from aero.cognition.account import AccountLogin
-        return AccountLogin(_require(p, "provider")).complete(
+        return AccountLogin(_require(p, "provider"), cfg=self.cfg).complete(
             _require(p, "code"), _require(p, "verifier"))
+
+    def _brain_login_poll(self, p: dict) -> dict:
+        from aero.cognition.account import AccountLogin
+        return AccountLogin(_require(p, "provider"), cfg=self.cfg).poll(
+            _require(p, "device_code"))
+
+    def _brain_oauth_client(self, p: dict) -> dict:
+        provider = _require(p, "provider")
+        s = self._settings()
+        s.oauth_client_ids = {**(s.oauth_client_ids or {}), provider: _require(p, "client_id")}
+        st.save(s, self.cfg)
+        return {"provider": provider, "client_id_set": True}
 
     # -- voice manager -----------------------------------------------------
     def _voice_list(self, p: dict) -> dict:
