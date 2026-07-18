@@ -42,22 +42,25 @@ class BrainProfile:
     cost_tier: CostTier = "paid"
     supports_vision: bool = False
     label: str = ""                  # human-friendly one-liner for `aero brain`
+    #: True for a local-hosted proxy that RELAYS to the cloud (LiteLLM): local to
+    #: reach, but the prompt still leaves the device — so it is not private.
+    forwards: bool = False
 
     @property
     def is_local(self) -> bool:
         """True if this brain runs on-device (Ollama, or an OpenAI adapter aimed
-        at localhost). A *local* brain keeps the turn private; note a LiteLLM
-        proxy is local-hosted but forwards to the cloud, so it is NOT private —
-        see :attr:`is_private`."""
+        at localhost). Note a LiteLLM proxy is local-hosted but forwards to the
+        cloud, so it is NOT private — see :attr:`is_private`."""
         if self.adapter == "ollama":
             return True
         return any(h in self.base_url for h in ("localhost", "127.0.0.1", "0.0.0.0"))
 
     @property
     def is_private(self) -> bool:
-        """True only if the prompt never leaves the device. Ollama qualifies; a
-        local proxy does not (it relays to a remote provider)."""
-        return self.adapter == "ollama"
+        """True only if the prompt never leaves the device: an on-device brain
+        (Ollama, or a local OpenAI server like LM Studio) that does not forward.
+        A local proxy that relays to a remote provider is local but not private."""
+        return self.is_local and not self.forwards
 
 
 # -- Built-in profiles -----------------------------------------------------
@@ -99,7 +102,60 @@ _BUILTINS: tuple[BrainProfile, ...] = (
         # real keys); local-hosted but forwards to the cloud, so not private.
         id="litellm", adapter="openai", model="gpt-4o-mini",
         base_url="http://localhost:4000", key_env=None, cost_tier="proxy",
+        forwards=True,   # local-hosted but relays to the cloud -> not private
         label="LiteLLM proxy (localhost:4000) — ~100 providers behind one seam",
+    ),
+    # -- other local providers (OpenAI-compatible servers; keyless, private) --
+    BrainProfile(
+        id="lmstudio", adapter="openai", model="local-model",
+        base_url="http://localhost:1234/v1", key_env=None, cost_tier="free-local",
+        label="LM Studio — local models with a friendly UI (localhost:1234)",
+    ),
+    BrainProfile(
+        id="llamacpp", adapter="openai", model="local-model",
+        base_url="http://localhost:8080/v1", key_env=None, cost_tier="free-local",
+        label="llama.cpp server — raw GGUF serving (localhost:8080)",
+    ),
+    BrainProfile(
+        id="jan", adapter="openai", model="local-model",
+        base_url="http://localhost:1337/v1", key_env=None, cost_tier="free-local",
+        label="Jan — offline desktop AI (localhost:1337)",
+    ),
+    BrainProfile(
+        id="vllm", adapter="openai", model="local-model",
+        base_url="http://localhost:8000/v1", key_env=None, cost_tier="free-local",
+        label="vLLM — high-throughput local serving (localhost:8000)",
+    ),
+    BrainProfile(
+        id="localai", adapter="openai", model="local-model",
+        base_url="http://localhost:8081/v1", key_env=None, cost_tier="free-local",
+        label="LocalAI — OpenAI drop-in for local models (localhost:8081)",
+    ),
+    # -- more cloud providers (OpenAI-compatible; need a key) --
+    BrainProfile(
+        id="mistral", adapter="openai", model="mistral-large-latest",
+        base_url="https://api.mistral.ai/v1", key_env="MISTRAL_API_KEY",
+        cost_tier="paid", label="Mistral — strong open-weight models, EU-hosted",
+    ),
+    BrainProfile(
+        id="deepseek", adapter="openai", model="deepseek-chat",
+        base_url="https://api.deepseek.com/v1", key_env="DEEPSEEK_API_KEY",
+        cost_tier="paid", label="DeepSeek — very cheap, strong reasoning",
+    ),
+    BrainProfile(
+        id="together", adapter="openai", model="meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        base_url="https://api.together.xyz/v1", key_env="TOGETHER_API_KEY",
+        cost_tier="paid", label="Together AI — many open models, fast",
+    ),
+    BrainProfile(
+        id="xai", adapter="openai", model="grok-beta",
+        base_url="https://api.x.ai/v1", key_env="XAI_API_KEY",
+        cost_tier="paid", label="xAI Grok",
+    ),
+    BrainProfile(
+        id="fireworks", adapter="openai", model="accounts/fireworks/models/llama-v3p3-70b-instruct",
+        base_url="https://api.fireworks.ai/inference/v1", key_env="FIREWORKS_API_KEY",
+        cost_tier="paid", label="Fireworks AI — fast open-model inference",
     ),
 )
 
