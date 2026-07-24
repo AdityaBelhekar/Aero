@@ -1,240 +1,225 @@
-# AERO — Handoff (continue in a new chat)
+# AERO — Handoff (continue in a new session)
 
-**Purpose:** everything a fresh session needs to continue building Aero without
-re-deriving context. Read this top-to-bottom, then start at "THE NEXT TASK".
+**Purpose:** everything a fresh session needs to continue Aero without re-deriving
+context. Read top-to-bottom, then pick from "WHAT TO DO NEXT".
 
-**Repo:** `C:\Users\Aditya\Desktop\Aero` · GitHub `https://github.com/AdityaBelhekar/Aero.git` (branch `main`)
-**Docs:** `Aero-PRD-v0.2.md` (requirements, IDs like AERO-XXX), `Aero-Implementation-Plan.md` (milestones/spikes).
-**Env:** Windows 11, 16 GB RAM, **CPU-only (no GPU)**, Python 3.11, Ollama installed, ffmpeg installed.
-
----
-
-## TL;DR — the decision just made
-
-Switch Aero's **ears (STT)** and **mouth (TTS)** to **AI4Bharat**, scoped to
-**English + Marathi only** (Hindi de-prioritised). Rationale: Aditya speaks
-English-heavy with Marathi mixed in ("bhai assignment nhi zali ata ky kru"), and
-AI4Bharat handles Indian-English + code-mixed Marathi.
-
-- **STT:** `ai4bharat/indicconformer_stt_mr_hybrid_ctc_rnnt_large`
-- **TTS:** `ai4bharat/indic-parler-tts`
-- **Approach:** try it; if it fails / disappoints, swap (fallbacks noted below).
-  Everything is behind swappable interfaces, so swapping is one new file.
-
-**Do NOT rewrite what exists — just add two new backends + benchmark.**
+**Last updated:** 2026-07-24, after building the entire v0.3 "Open Aero" plan
+(M8–M15) + connect-any-AI + the full voice marketplace, in one long session.
 
 ---
 
-## PROJECT STATE — what's already built & working (don't rebuild)
+## TL;DR — where things stand
 
-All committed & pushed. **60 tests pass** (`python -m pytest -q`). Milestones 1 & 2
-done; Milestone 3 (voice) mostly done.
-
-**Brain / memory (Milestone 1–2, DONE):**
-- `src/aero/vault/` — encrypted SQLite memory vault (schema v1, audit journal, backup/restore). CLI `aero init/status/backup/restore/smoke`.
-- `src/aero/cognition/` — `CognitionService` interface + `OllamaCognition` (model `gemma4:e4b`, **thinking OFF by default** — it's a reasoning model, leaving it on returns empty content) + `OllamaEmbedder` (`embeddinggemma`, 768-dim).
-- `src/aero/memory/` — store, consolidation (LLM tagging → episodic/semantic memories + graph edges + belief reconcile: reinforce/contradict/staleness sweep), hybrid retrieval (vector anchor → graph spread → rerank + Wild Recall + social-fit).
-- `src/aero/prompts/` — versioned tagging/reconcile/persona prompts.
-- `src/aero/working_set.py`, `src/aero/agent.py` — assemble context + run a memory-in-the-loop turn.
-- `src/aero/perception/tier0.py` — Tier-0 world state (active window/process/idle via ctypes).
-- `src/aero/daemon.py` — always-on daemon: keep models warm + idle consolidation. CLI `aero daemon`.
-- **Proven:** preference told in session 1 survives consolidation + restart and resurfaces in session 2 with provenance.
-
-**Two-speed brain + cloud option (added after the AI4Bharat spike):**
-- `src/aero/effort.py` — `classify()` routes each turn `reflex` (banter/acks/commands)
-  vs `deep` (memory-reaching/substantive). Memory-first: core identity is ALWAYS in
-  the prompt; reflex skips only the expensive retrieval (and the embeddinggemma call,
-  which was evicting gemma4 and forcing ~10s reloads). Measured: reflex ~2x faster.
-- **The real latency wall is gemma4:e4b itself on CPU: ~5-11s/turn (prefill is
-  free; it's the 9.6 GB model). No prompt trick fixes it — needs a smaller model or
-  GPU, OR the cloud brain below.**
-- `src/aero/cognition/cloud_backend.py` — `CloudCognition`, an OpenAI-compatible
-  online brain (Groq/OpenAI/OpenRouter/Gemini) for real-time replies. Local gemma4
-  stays the private default; cloud is opt-in via `aero brain --set cloud` (key from
-  env, never persisted). Memory stays 100% local — only generation goes online.
-  `settings.build_brain()` picks it. See `docs/CLOUD_BRAIN_SETUP.md`.
-
-**Real-time hands-free loop (DONE + proven) — the no-button conversation:**
-- `src/aero/voice/vad.py` — `VAD` iface, `EnergyVAD` (dep-free default), optional
-  `SileroVAD`, and `VADSegmenter` (pure endpointing state machine — unit-tested).
-- `src/aero/voice/mic_stream.py` — `MicStream` (sounddevice, optional) + pcm->wav.
-- `src/aero/voice/realtime.py` — `RealtimeLoop`: mic -> VAD endpointing -> STT ->
-  agent(+memory, two-speed) -> Kokoro, with **barge-in** (interruptible winsound
-  playback). `handle_utterance` is the testable core. CLI: `aero voice --realtime`.
-- Proven end-to-end on real audio: VAD auto-segmented one turn, Moonshine
-  transcribed a synthesized English line **verbatim**, hands-free. Extras:
-  `.[realtime]` (sounddevice) / `.[realtime_silero]`. See docs/REALTIME_SETUP.md.
-- Tuning lives in `SegmenterConfig` (start_ms/end_silence_ms/preroll_ms) +
-  `EnergyVAD.threshold`/`calibrate`; barge-in via `RealtimeLoop(barge_in_ms=...)`.
-
-**English ear — Moonshine (fast English STT, DONE + proven):**
-- `src/aero/perception/moonshine_stt.py` — `MoonshineSTT(STTService)` via
-  `useful-moonshine-onnx` (import `moonshine_onnx`; pure ONNX, no torch). Models
-  `moonshine/tiny` (26M) | `moonshine/base` (58M, default). Selected via
-  `aero voice --model moonshine[/tiny]`; factory in `indic_stt.build_stt`.
-  **Proven: clean English → near-verbatim** (Kokoro→Moonshine round-trip returned
-  sentences word-for-word). Garbles Marathi by design (English-only — that's the
-  point of the English pivot). RTF ~realtime on `base` (faster offline / on tiny).
-  PyPI dist is `useful-moonshine-onnx`, NOT `moonshine-onnx`. See docs/MOONSHINE_SETUP.md.
-
-**English voice — Kokoro (the CPU-fast real voice, DONE + proven):**
-- `src/aero/voice/kokoro_tts.py` — `KokoroTTS(TTSService)` via `kokoro-onnx`.
-  **Measured warm RTF ~0.62-0.77x on this CPU** (faster than realtime; first call
-  ~5s incl. load). Real 24 kHz speech proven end-to-end. This is the answer to the
-  Parler-277x dead end. Model files (~336 MB) in `models/kokoro/` (gitignored),
-  downloaded from the kokoro-onnx v1.0 release. `engine=kokoro`, voices like
-  `am_michael`/`bm_george` via `aero voices --set am_michael`. ONNX → can use the
-  iGPU via onnxruntime-directml. See `docs/KOKORO_SETUP.md`.
-
-**Voice (Milestone 3, current state):**
-- `src/aero/perception/stt.py` — `STTService` interface + `FasterWhisperBackend` (Whisper `small` default, configurable beam). **This is the STT interface to implement against.**
-- `src/aero/voice/speech_intent.py` — `SpeechIntent` (delivery: energy/pace/pauses/etc.) + SSML renderer + `intent_from_text()`.
-- `src/aero/voice/tts.py` — `TTSService` interface + `SapiTTS` (Windows placeholder voice). **This is the TTS interface to implement against.**
-- `src/aero/voice/svara_tts.py` — `SvaraTTS` (HTTP client to a Svara server; built but server never stood up). Example of the client-backend pattern.
-- `src/aero/voice/mic.py` — push-to-talk mic capture via ffmpeg (no extra deps). `aero mics`.
-- `src/aero/voice/loop.py` — `VoiceLoop` ties mic → STT → agent → intent → TTS. CLI `aero voice` (and `--text` mode).
-- `src/aero/settings.py` — persisted TTS engine + voice choice (`AERO_HOME/settings.json`); `build_tts()` picks the backend. `aero voices` lists/selects.
-
-**Spike verdicts (in `spikes/`):**
-- **S-1** (`S1_VERDICT.md`): gemma4:e4b viable. It's a reasoning model → thinking OFF.
-- **S-2** (`S2_VERDICT.md`): embeddinggemma 90% top-1 on romanised Marathi/Hindi.
-- **S-3** (`S3_VERDICT.md`): tested base/small/turbo Whisper on Aditya's 10 real clips. small comprehends code-switch (outputs Devanagari, fine for gemma4) but ~1.5× RTF; turbo best+stable but ~3.5× (too slow on CPU); base too weak. **This is why we're now trying AI4Bharat.**
-
-**Test recordings:** `rec/*.m4a` (Aditya's 10 code-switched sentences) → converted to `spikes/s3_testset/*.wav` (16k mono). References in `spikes/s3_testset/manifest.tsv`. **Audio is gitignored (biometric).**
+- **Everything is architecturally built and unit-tested (491 passing), but almost
+  nothing has run against a real service.** The whole session was hermetic —
+  mocked HTTP, injected backends, no live models. That is the #1 thing to know.
+- **Branch:** `feat/english-realtime-voice` (NOT `main` — it's ~41 commits ahead).
+  All work is committed + pushed to GitHub over SSH.
+- **The v0.3 plan (M8–M15) is complete.** Plus: 21 brain providers, 3 OAuth logins,
+  7 STT + 8 TTS engines (all cloud adapters written incl. Google).
+- **Biggest conceptual hole:** **Proactivity / the impulse gate is NOT built** —
+  the old plan's M4, skipped when v0.3 jumped M3→M8. Aero only responds when
+  spoken to. This is arguably the most "Aero" feature (silence as output).
 
 ---
 
-## THE NEXT TASK — wire AI4Bharat STT + TTS
+## ENVIRONMENT (Ubuntu — migrated from Windows mid-project)
 
-### Step 0 — confirm inference setup (do this first, network is flaky)
-Read the HF model cards for exact inference code before installing:
-- STT: https://huggingface.co/ai4bharat/indicconformer_stt_mr_hybrid_ctc_rnnt_large
-- TTS: https://huggingface.co/ai4bharat/indic-parler-tts
-
-Likely dependencies (verify):
-- **IndicConformer** → NVIDIA **NeMo** (`nemo_toolkit[asr]`) — HEAVY. Check the model card for a lighter path (ONNX export, or the `ai4bharat/IndicConformer` repo's own inference). Loads via `nemo.collections.asr`. Outputs Devanagari; supports CTC and RNNT decoding. Claims Indian-English + code-mix support.
-- **Indic Parler-TTS** → `pip install git+https://github.com/huggingface/parler-tts.git` + transformers. Input = text + a natural-language **description** of the voice (e.g. "a young male Indian voice, warm and casual"). ~a few GB. Output ~44.1 kHz wav.
-
-### Step 1 — BENCHMARK STT before committing (empirical, we have the data)
-Run the Marathi conformer against Aditya's 10 clips and compare to Whisper `small`:
-- Harness: `spikes/s3_stt_probe.py` (currently takes `--model` for faster-whisper). Either add an IndicConformer path to it, or write a small parallel probe. Reference transcripts already in `spikes/s3_testset/manifest.tsv`.
-- Decide by **reading the outputs**, not just WER (WER is unfair vs Devanagari — see S-3 verdict). Care about: does it get the English words right? the Marathi? and RTF (< 1.0 wanted for snappy voice).
-- If conformer beats Whisper on Aditya's voice → adopt it. If not → keep Whisper `small`, revisit.
-
-### Step 2 — implement the backends (same swappable pattern as existing)
-- **STT:** new `src/aero/perception/indic_stt.py` → class `IndicConformerSTT(STTService)` implementing `transcribe(audio_path, language=None) -> Transcript` and `health_check()`. Mirror `FasterWhisperBackend`. Add it as a selectable `--model`/engine in `aero voice`.
-- **TTS:** new `src/aero/voice/parler_tts.py` → class `ParlerTTS(TTSService)` implementing `synthesize(intent, out_path) -> SpeechResult`, `speak(intent)`, `health_check()`. Map `SpeechIntent` → a Parler voice-description string (Aero = young Indian male, warm, casual). Register in `settings.build_tts()` (add `engine == "parler"`) and in `aero voices` engine choices.
-- Add optional extras in `pyproject.toml` (`[project.optional-dependencies]`): e.g. `indic_stt = [...]`, `parler = [...]`.
-- Add hermetic tests (mock the heavy model, like `tests/test_svara.py` mocks HTTP): interface shape, engine selection, settings round-trip.
-
-### Step 3 — wire selection + fallback
-- `settings.py`: engine options become `sapi | svara | parler` (+ STT choice). Keep graceful fallback to SAPI/Whisper if a backend is unavailable.
-- Update `docs/` with a short setup note (like `docs/SVARA_SETUP.md`).
-
-### Step 4 — try it end-to-end, then decide
-Run `aero voice`, talk, judge quality + latency. If Parler is too slow on CPU
-(likely — it's LLM-style), fall back options in priority order:
-1. **`ai4bharat/vits_rasa_13`** (VITS — light, CPU-fast, Indian voices) ← best CPU fallback
-2. `ai4bharat/IndicF5` (F5-TTS)
-3. Sarvam **API** (Saaras codemix STT + Bulbul TTS) — cloud, not open, but near-free with ₹1000 credits and best code-switch; good "online boost" tier if local disappoints
-4. Keep SAPI placeholder
+- **OS:** Ubuntu 26.04. Ships Python **3.14**, which is too new for the ML wheels.
+- **Python:** a **uv-managed 3.11 venv** at `/home/aditya/Desktop/Dev/Aero/.venv`.
+  Run everything via `.venv/bin/python`. `uv` is at `~/.local/bin`.
+- **Installed extras:** `dev,stt,embed` (torch 2.13, faster-whisper,
+  sentence-transformers, sqlite-vec).
+- **NOT installed (need sudo; user chose to skip for now):** `ffmpeg` (mic) and
+  `ollama` + models `gemma4:e4b` + `embeddinggemma` (the brain). **So nothing that
+  needs the live brain/voice can actually run yet.**
+- **Vault:** plaintext (no `sqlcipher3`) — a warning prints; fine for dev.
+- **Git:** SSH auth configured (key added to GitHub). `git push` works.
+- Tests: `.venv/bin/python -m pytest -q` → **491 passed, 3 skipped**.
 
 ---
 
-## KEY GOTCHAS / LESSONS (save yourself the pain)
+## WHAT'S DONE (all committed + pushed)
 
-- **Indic Parler-TTS backend PROVEN working but GPU-only (measured 2026-07-11).**
-  `ParlerTTS` synthesizes real 44.1 kHz mono speech end-to-end (verified
-  non-silent, intent→voice-description mapping works), but on this CPU it took
-  **1162 s for a 4.2 s line — RTF ≈ 277x** (~19 min/sentence). Unusable live.
-  Pulls flan-t5-large + dac_44khz alongside the 0.9B model. **Verdict: keep SAPI/
-  the CPU-fast path; use Parler only on a GPU.** CPU-friendly Aero voice fallback
-  = AI4Bharat VITS (`vits_rasa_13`). Backend + `engine=parler` wiring stay ready.
-- **IndicConformer STT needs the AI4Bharat NeMo FORK — upstream PyPI NeMo can't
-  load it (proven 2026-07-11).** The `.nemo` (downloaded OK to `models/indicconformer_mr/`)
-  uses a `multilingual` tokenizer + `multisoftmax` RNNT decoder, both fork-only.
-  With `nemo_toolkit==2.7.3` it dies on `KeyError: 'dir'`, then (after an
-  agg-tokenizer config patch) on `RNNTDecoder ... unexpected kwarg 'multisoftmax'`.
-  The fork's `bash reinstall.sh` is Linux-only (pynini) → doesn't build on this
-  Windows box. **Verdict: STT stays Whisper `small` on this box;** run
-  IndicConformer under WSL2 / Linux / GPU, or use the Sarvam API tier. The
-  `IndicConformerSTT` backend, resilient downloader, and `--backend indic` probe
-  are all wired and ready for such a box. TTS (Parler) is unaffected — it's a
-  plain transformers model, downloadable and pip-installable (not gated for DL).
-- **AI4Bharat models are GATED** — `indicconformer_stt_mr_hybrid_ctc_rnnt_large`,
-  `indic-parler-tts` (and the umbrella `indicconformer`) are `gated=auto`. You must
-  click "Agree and access repository" on each HF model page (logged in as the
-  cached-token account, `ItsxxAdityaa`) before weights download. Auto-grant is
-  instant, but until accepted the `.nemo`/weights 403 with `GatedRepoError ... not
-  in the authorized list` — this is terms-not-accepted, NOT the network. `model_info`
-  still returns metadata even when unaccepted, so gating check ≠ download works.
-  See `docs/AI4BHARAT_SETUP.md`.
-- **Downloads keep failing on this network** — HuggingFace resets connections (`WinError 10054 / ECONNRESET`) on large pulls. Turbo (1.6 GB) failed 3× incl. with `hf_transfer`. **Mitigations:** small models download fine; for big ones use `huggingface-cli download <repo> --local-dir models/<name>` and **re-run to resume**, or download in a browser/download-manager, or a VPN. `models/` is gitignored. Ollama registry stalled similarly once — same network issue, not the tools.
-- **CPU-only, no GPU.** Every heavy model is slow: turbo STT ~3.5× RTF, Parler/Svara TTS will be seconds-per-sentence. VITS and small models are the CPU-friendly ones. This is a hardware ceiling; a GPU changes everything (turbo → ~0.2× etc.).
-- **gemma4:e4b is a reasoning model** — always run with thinking OFF (already handled in `OllamaCognition`; keep it that way). Cold model load ~40s; the daemon keeps it warm.
-- **Devanagari STT output is FINE** — gemma4 reads it natively downstream, so don't require romanised transcripts. WER against romanised references is misleading; judge by reading outputs.
-- **Never commit audio or the vault** — `.gitignore` covers `*.wav *.m4a rec/ data/ models/ *.vault`. Voice = biometric.
-- **Windows shell:** use `PYTHONIOENCODING=utf-8` for scripts printing Devanagari/emoji or the console crashes (cp1252). Tests run via `python -m pytest -q` (pyproject sets `pythonpath=src`).
-- **Two-tier philosophy option:** local (open, private, default) + optional online boost (Sarvam API) when quality/speed matters. Sarvam speech is API-only/paid (open-core: LLMs open, voice closed). AI4Bharat is fully open (MIT) — the local answer.
+Pre-session baseline: M1–M3 (encrypted vault, memory core, partial voice), 60 tests.
+
+### The v0.3 "Open Aero" plan — M8–M15, all built
+
+- **M8 Open Brain** (`cognition/`): brain registry of swappable profiles
+  (`registry.py`), two-speed router (`router.py` — chat→primary, tagging→reflex,
+  privacy guard, degrade-never-die), keyring key vault (`keys.py`).
+- **M9 Presence** (`presence/`): the avatar *puppeteer* — `AvatarState`, rig
+  manifest, emotion map (SpeechIntent→Emotion), animation state machine, ambient
+  fidget scheduler, `PresenceDriver`. **No renderer** (the puppet) — needs a 3D
+  model + spikes S-11/S-12.
+- **M10 Control App** (`control/`): `ControlService.dispatch(op,params)` — the
+  whole management API (status/brain/voice/persona/perms/memory/hands/eyes/play/
+  body). Local-socket IPC server + client wired into the daemon. `aero control`
+  CLI. Persona dials + permissions + kill switch in settings. **Tauri GUI is
+  scaffolded (`ui/control-app/`) but never compiled** (needs webkit+Rust+display).
+- **M11 Voice Marketplace** (`voice/`, `perception/`): engine catalog
+  (`voice/catalog.py`), fallback chain (`voice/fallback.py`), voice keyring,
+  lip-sync feed (`voice/lipsync.py`, audio→avatar mouth). All cloud adapters
+  written: `voice/cloud_tts.py` (ElevenLabs/Sarvam/Cartesia/Google),
+  `perception/cloud_stt.py` (Deepgram/Sarvam/Google).
+- **M12 Little Hands** (`hands/`): consent gate (`consent.py` — kill-switch >
+  default-deny > hard-gate-confirm > allow, all structural code), actuator audit
+  journal (`journal.py` + `actuator_log` table), executor (`executor.py` — the
+  only path a tool runs), user-authorable skills, MCP bridge. **S-10 consent
+  red-team PASSED** (`spikes/S10_VERDICT.md`).
+- **M13 Eyes** (`perception/vision.py`, `ocr.py`, `vision_router.py`):
+  consent-gated ephemeral capture (screen/camera scopes), OCR interface,
+  scene-change sampler, multimodal routing (CognitionService.see + CloudCognition
+  vision). **Real capture unavailable headless** — grabbers report
+  `available()=False` until a display/camera exists.
+- **M14 Play** (`play/`): GameConnector interface, anti-cheat policy (spectate-only
+  games structurally refuse actions), Minecraft LAN bridge (needs an external Node
+  Mineflayer process), spectator (vision-only), voice+game+avatar fusion.
+- **M15 Body** (`body/`): platform abstraction (`host.py` — detects windows/
+  linux-desktop/linux-arm/headless; fixes the Windows-only tier0), hardware I/O
+  (`hardware.py` — servos/LEDs/display-face, no-op when absent), shared face rig
+  (`face.py`), robot profile + Pi brain preset + systemd autostart (`robot.py`).
+
+### Post-plan extras (user-requested)
+
+- **Connect any AI** (`cognition/providers.py`, `discovery.py`, `account.py`): 21
+  brain providers — 6 local (Ollama/LM Studio/llama.cpp/Jan/vLLM/LocalAI, with
+  `--discover`), 12 cloud-by-key (incl. Claude/ChatGPT/Grok/Gemini/Kimi/DeepSeek/
+  Cohere/Perplexity/Qwen/Cerebras/NVIDIA/Mistral/Together/Fireworks), 3 OAuth
+  logins (OpenRouter PKCE, Hugging Face auth-code, GitHub device). `aero brain
+  --providers/--discover/--login/--oauth-client`.
+- **KEY BOUNDARY (do not cross):** no path uses a consumer **ChatGPT/Claude
+  subscription** — that requires ToS-violating web-session reverse-proxying and was
+  explicitly declined 3×. "Log in and use all models" = **OpenRouter** (one login
+  reaches Claude/GPT/Grok/etc. legitimately). Keep this line.
+
+---
+
+## WHAT'S LEFT / NOT DONE
+
+### Missing core features (biggest gaps)
+
+1. **Proactivity — the impulse generator + impulse gate (old-plan M4, PRD §7).**
+   NOT built. Aero never initiates; silence-as-output doesn't exist. This is the
+   most "Aero" missing piece. Two-tier design in the PRD: cheap continuous impulse
+   generation + on-demand LLM gate that defaults to silence.
+2. **Thought threads** — schema table + CLI mention exist; **no logic**.
+3. **Relationship model** — schema table exists; **no logic** (familiarity/trust/
+   humour-tolerance that should gate behaviour).
+4. **Attention history / heat** — feeds retrieval rerank; not implemented.
+
+### Built but NEVER RUN LIVE (the verification debt)
+
+- **Nothing has executed against a real service this whole session.** All hermetic.
+- **~20 cloud brain adapters + 8 cloud voice adapters** — written to documented API
+  shapes, unit-tested for request shaping, **never called live**. Each needs one
+  real key + one call. This is where surprises will be.
+- **OAuth logins** (OpenRouter/HF/GitHub) — flows per spec, never hit live; HF +
+  GitHub need registered OAuth apps first.
+- **TTS on Linux:** default is SAPI (**Windows-only, dead on Ubuntu**). Kokoro/Svara
+  are the Linux paths but were never stood up/tested.
+
+### Needs external things (not just code)
+
+- **M9 avatar renderer** — Aditya's 3D model/clips + spike S-11 (web/Three.js vs
+  Godot) + S-12 (lip-sync). Wayland/X11 matters on 26.04.
+- **M10 Tauri GUI** — `sudo apt install libwebkit2gtk-4.1-dev` + Rust + a display.
+- **M13 real capture** — a display (screen) / camera device.
+- **M14 Minecraft** — a Node Mineflayer bridge process against a LAN world.
+- **M15 Pi** — real hardware; spike S-8 (latency) deferred.
+
+### Housekeeping
+
+- Branch not merged to `main`. README still says "Milestone 2".
+- 7 pre-existing ruff errors in files not touched this session
+  (`voice/loop.py`, `voice/mic_stream.py`, `voice/mic.py`, `memory/store.py`,
+  `memory/consolidation.py`).
+- Deferred spikes: S-6, S-7, S-8, S-11, S-12 (all have NOTES files under `spikes/`).
+
+---
+
+## KEY GOTCHAS / LESSONS
+
+- **Run via `.venv/bin/python`** (uv Python 3.11). System `python3` is 3.14 and
+  will break ML deps.
+- **gemma4:e4b is a reasoning model → thinking OFF** (handled in `OllamaCognition`;
+  keep it). Cold load ~40s; daemon keeps it warm.
+- **Devanagari STT output is fine** — gemma4 reads it; don't require romanised.
+- **The consent gate + play anti-cheat are STRUCTURAL (code, not prompts).** Two
+  red-teams pass (S-10 consent, play anti-cheat). Don't weaken these; re-run their
+  tests after any change near actions/games.
+- **Everything follows one pattern:** interface → registry of profiles → builder →
+  (consent gate where it acts). Brains, voices, tools, games, providers all mirror
+  it. New backends implement the interface; nothing else changes.
+- **Cloud adapters isolate one network method** (`_send`/`_post`) so request
+  shaping is unit-tested without the network. When verifying live, that's the
+  method that actually hits the wire.
+- **Never commit audio/vault** (`.gitignore` covers `*.wav *.m4a rec/ data/
+  models/ *.vault`). Voice = biometric.
+- **End commit messages with** `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ---
 
 ## COMMANDS CHEAT-SHEET
 
-```powershell
-cd C:\Users\Aditya\Desktop\Aero
-$env:PYTHONIOENCODING = "utf-8"
+```bash
+cd /home/aditya/Desktop/Dev/Aero
+PY=.venv/bin/python
 
-python -m pytest -q                         # 60 tests, all green
-python -m aero.cli status                   # vault info
-python -m aero.cli chat                      # text chat with memory
-python -m aero.cli consolidate               # turn chat into memory (idle write path)
-python -m aero.cli daemon                    # always-on: keep-warm + idle consolidation
-python -m aero.cli voice                     # full voice loop (mic PTT -> STT -> Aero -> TTS)
-python -m aero.cli voice --text              # no mic; type, Aero speaks
-python -m aero.cli voices                    # list/select TTS voice + engine
-python -m aero.cli mics                      # list microphones
-python spikes/s3_stt_probe.py --model small  # STT benchmark on the 10 clips
+$PY -m pytest -q                       # 491 passing
+$PY -m aero.cli brain --providers      # 21 AI providers (local/key/login)
+$PY -m aero.cli brain --discover       # which local model servers are running
+$PY -m aero.cli brain --login openrouter   # OAuth login (untested live)
+$PY -m aero.cli voices --catalog       # 7 STT + 8 TTS engines
+$PY -m aero.cli control ops            # every control-plane operation
+$PY -m aero.cli hands tools            # consented actions
+$PY -m aero.cli eyes status            # vision sources + grants
+$PY -m aero.cli play games             # play/spectate policy
+$PY -m aero.cli body status            # host/robot/hardware
 
-ollama list                                  # gemma4:e4b + embeddinggemma present
+# needs sudo (skipped for now):  sudo apt install ffmpeg
+#                                curl -fsSL https://ollama.com/install.sh | sh
 ```
 
 ---
 
-## FILE MAP (where things live)
+## FILE MAP (new since M3)
 
 ```
-Aero-PRD-v0.2.md / Aero-Implementation-Plan.md   # requirements + plan
 src/aero/
-  cli.py                    # all subcommands
-  config.py  settings.py    # paths; persisted voice/engine prefs
-  daemon.py  agent.py  working_set.py
-  vault/                    # encrypted memory store + backup + audit
-  cognition/                # LLM + embeddings (Ollama), swappable
-  memory/                   # store, consolidation, retrieval, models
-  prompts/                  # tagging, reconcile, persona (versioned)
-  perception/
-    tier0.py                # world state (window/process/idle)
-    stt.py                  # STTService + FasterWhisperBackend  <- add IndicConformerSTT
-  voice/
-    tts.py                  # TTSService + SapiTTS               <- add ParlerTTS
-    svara_tts.py            # client-backend pattern example
-    speech_intent.py  mic.py  loop.py
-tests/                      # 60 tests (mirror patterns for new backends)
-spikes/                     # S1/S2/S3 verdicts + probes + s3_testset (audio gitignored)
-docs/SVARA_SETUP.md         # pattern for a backend setup doc
-rec/                        # Aditya's m4a recordings (gitignored)
-models/                     # downloaded weights go here (gitignored)
+  cognition/  registry.py router.py keys.py providers.py discovery.py account.py
+              cloud_backend.py(see) service.py(see/VisionUnsupported)
+  presence/   state.py rig.py emotion.py state_machine.py ambient.py driver.py
+  control/    service.py ipc.py            # management API + daemon socket
+  hands/      tool.py registry.py consent.py journal.py executor.py skills.py mcp_bridge.py
+  perception/ vision.py ocr.py vision_router.py cloud_stt.py   (+ tier0/stt/indic/moonshine)
+  voice/      catalog.py fallback.py lipsync.py cloud_tts.py   (+ tts/svara/kokoro/parler/…)
+  play/       connector.py minecraft.py spectator.py fusion.py
+  body/       host.py hardware.py face.py robot.py
+  settings.py # widened: brain registry, persona dials, permissions, robot, oauth_client_ids
+  cli.py      # + brain(expanded) control hands eyes play body
+ui/control-app/           # Tauri scaffold (uncompiled)
+docs/  OPEN_BRAIN_SETUP CONTROL_APP_SETUP VOICE_MARKETPLACE LITTLE_HANDS EYES_SETUP
+       PLAY_SETUP BODY_SETUP PRESENCE_SETUP  (+ this file)
+spikes/ S5_VERDICT S10_VERDICT S8_NOTES S11_S12_NOTES
+tests/  ~50 files, 491 tests
+Aero-v0.3-Open-Aero-Plan.md   # the plan just completed
 ```
 
 ---
 
-## SUGGESTED FIRST MESSAGE FOR THE NEW CHAT
+## WHAT TO DO NEXT (pick one — user will decide)
 
-> "Continue Aero. Read docs/HANDOFF.md. Task: benchmark
-> `ai4bharat/indicconformer_stt_mr_hybrid_ctc_rnnt_large` against Whisper small on
-> my 10 clips in spikes/s3_testset, then wire AI4Bharat STT + `ai4bharat/indic-parler-tts`
-> as new swappable backends (English + Marathi scope). Don't rebuild existing stuff.
-> Network drops big HF downloads — use resumable pulls to models/."
-```
-```
+1. **Build Proactivity (M4 / PRD §7)** — the biggest missing *core* feature. Impulse
+   generator (cheap, continuous) + impulse gate (LLM, default-silence) + thought
+   threads + relationship model. Fully buildable hermetically, no hardware. This is
+   what makes Aero *notice* rather than only respond.
+2. **Prove ONE path live** — smallest real win. E.g. get an OpenRouter key, run one
+   real `aero chat` turn; or stand up Kokoro TTS and hear one line. Turns "491 tests
+   pass" into "it actually works."
+3. **Consolidate** — merge branch→main, refresh README/status, tidy the 7 ruff nits.
+4. **Unblock a visual piece** — author a starter 3D model (M9 avatar) or install the
+   Tauri toolchain (M10 GUI).
+
+**Recommendation:** #1 (fills the core gap) or #2 (retires the biggest risk). The
+codebase is broad and well-tested but has never met reality — that's the tension.
