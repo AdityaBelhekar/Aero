@@ -3,23 +3,27 @@
 **Purpose:** everything a fresh session needs to continue Aero without re-deriving
 context. Read top-to-bottom, then pick from "WHAT TO DO NEXT".
 
-**Last updated:** 2026-07-24, after building the entire v0.3 "Open Aero" plan
-(M8–M15) + connect-any-AI + the full voice marketplace, in one long session.
+**Last updated:** 2026-07-24, after building **M4 Proactivity** (the impulse
+generator + gate, thought threads, relationship model, self-memory) on top of the
+v0.3 "Open Aero" plan (M8–M15) + connect-any-AI + the full voice marketplace.
 
 ---
 
 ## TL;DR — where things stand
 
-- **Everything is architecturally built and unit-tested (491 passing), but almost
+- **Everything is architecturally built and unit-tested (546 passing), but almost
   nothing has run against a real service.** The whole session was hermetic —
   mocked HTTP, injected backends, no live models. That is the #1 thing to know.
-- **Branch:** `feat/english-realtime-voice` (NOT `main` — it's ~41 commits ahead).
-  All work is committed + pushed to GitHub over SSH.
+- **Branch:** `feat/english-realtime-voice` (NOT `main` — it's ~42 commits ahead).
+  All work (incl. M4) is committed + pushed to GitHub over SSH.
 - **The v0.3 plan (M8–M15) is complete.** Plus: 21 brain providers, 3 OAuth logins,
   7 STT + 8 TTS engines (all cloud adapters written incl. Google).
-- **Biggest conceptual hole:** **Proactivity / the impulse gate is NOT built** —
-  the old plan's M4, skipped when v0.3 jumped M3→M8. Aero only responds when
-  spoken to. This is arguably the most "Aero" feature (silence as output).
+- **The biggest conceptual hole is now filled: M4 Proactivity is BUILT** —
+  `proactive/` package: two-tier impulse generator (tier 1, no model) + impulse
+  gate (tier 2, LLM, **structural default-silence**), thought threads, relationship
+  model, self-memory logging of every decision incl. silences, feedback-learned
+  thresholds. Wired into the daemon tick + `aero proactive` CLI. Never run live
+  (like everything else) — the gate's LLM social eval has only met fake brains.
 
 ---
 
@@ -99,14 +103,28 @@ Pre-session baseline: M1–M3 (encrypted vault, memory core, partial voice), 60 
 
 ### Missing core features (biggest gaps)
 
-1. **Proactivity — the impulse generator + impulse gate (old-plan M4, PRD §7).**
-   NOT built. Aero never initiates; silence-as-output doesn't exist. This is the
-   most "Aero" missing piece. Two-tier design in the PRD: cheap continuous impulse
-   generation + on-demand LLM gate that defaults to silence.
-2. **Thought threads** — schema table + CLI mention exist; **no logic**.
-3. **Relationship model** — schema table exists; **no logic** (familiarity/trust/
-   humour-tolerance that should gate behaviour).
-4. **Attention history / heat** — feeds retrieval rerank; not implemented.
+1. ~~**Proactivity — impulse generator + gate (M4, PRD §7).**~~ **BUILT** this
+   session (`src/aero/proactive/`). Two-tier: tier-1 impulse generation (cheap,
+   no model, never timer-based per AERO-PRO-001) + tier-2 LLM gate with
+   *structural* default-silence (kill switch / quiet hours / staleness / below-
+   threshold all short-circuit to silence in code, before any token is spent).
+   Every decision incl. silences logged to `self_memory` (AERO-PRO-006). Feedback
+   learning routes interruption tolerance → gate threshold, joke/quality →
+   relationship (AERO-FBK-003). Daemon surfaces a "speak" as a quiet text message
+   on the `proactive` raw-event channel. See `docs/PROACTIVITY_SETUP.md`.
+2. ~~**Thought threads**~~ **BUILT** — `proactive/threads.py`: active→dormant→
+   resolved lifecycle, cap 20, trigger matching feeds tier-1 reactivation.
+3. ~~**Relationship model**~~ **BUILT** — `proactive/relationship.py`: slow-moving
+   dims with bounded per-nudge delta (AERO-REL-003), conservative cold-start seeds
+   (AERO-COLD-003). *Gates the threshold* (familiarity) + moved by feedback.
+4. **Attention history / heat** — feeds retrieval rerank; **still not implemented**
+   (the one M4-adjacent piece left; AERO-ATT-001).
+
+**Proactivity's own gaps:** the tier-1 producers are a starter set (novelty,
+return-from-away, repeated-failure, thread-reactivation) — no humour/contradiction/
+memory-activation producers yet, and `recent_failures` is passed as 0 by the
+daemon (no failure detector wired). The gate's LLM social eval has never met a
+real brain.
 
 ### Built but NEVER RUN LIVE (the verification debt)
 
@@ -176,6 +194,8 @@ $PY -m aero.cli hands tools            # consented actions
 $PY -m aero.cli eyes status            # vision sources + grants
 $PY -m aero.cli play games             # play/spectate policy
 $PY -m aero.cli body status            # host/robot/hardware
+$PY -m aero.cli proactive status       # M4: gate state + relationship + threads
+$PY -m aero.cli proactive simulate --app impulse.py --title generator.py --hour 14  # one hermetic gate tick
 
 # needs sudo (skipped for now):  sudo apt install ffmpeg
 #                                curl -fsSL https://ollama.com/install.sh | sh
@@ -187,6 +207,8 @@ $PY -m aero.cli body status            # host/robot/hardware
 
 ```
 src/aero/
+  proactive/  impulse.py generator.py threshold.py gate.py threads.py
+              relationship.py selfmem.py loop.py   # M4 — the impulse gate
   cognition/  registry.py router.py keys.py providers.py discovery.py account.py
               cloud_backend.py(see) service.py(see/VisionUnsupported)
   presence/   state.py rig.py emotion.py state_machine.py ambient.py driver.py
@@ -196,13 +218,14 @@ src/aero/
   voice/      catalog.py fallback.py lipsync.py cloud_tts.py   (+ tts/svara/kokoro/parler/…)
   play/       connector.py minecraft.py spectator.py fusion.py
   body/       host.py hardware.py face.py robot.py
-  settings.py # widened: brain registry, persona dials, permissions, robot, oauth_client_ids
-  cli.py      # + brain(expanded) control hands eyes play body
+  daemon.py   # tick() now also runs proactive._maybe_proact (M4)
+  settings.py # widened: brain registry, persona dials, permissions, robot, oauth_client_ids, proactive
+  cli.py      # + brain(expanded) control hands eyes play body proactive
 ui/control-app/           # Tauri scaffold (uncompiled)
 docs/  OPEN_BRAIN_SETUP CONTROL_APP_SETUP VOICE_MARKETPLACE LITTLE_HANDS EYES_SETUP
-       PLAY_SETUP BODY_SETUP PRESENCE_SETUP  (+ this file)
+       PLAY_SETUP BODY_SETUP PRESENCE_SETUP PROACTIVITY_SETUP  (+ this file)
 spikes/ S5_VERDICT S10_VERDICT S8_NOTES S11_S12_NOTES
-tests/  ~50 files, 491 tests
+tests/  ~56 files, 546 tests  (6 new: test_proactive_* + daemon proactive surface)
 Aero-v0.3-Open-Aero-Plan.md   # the plan just completed
 ```
 
@@ -210,16 +233,17 @@ Aero-v0.3-Open-Aero-Plan.md   # the plan just completed
 
 ## WHAT TO DO NEXT (pick one — user will decide)
 
-1. **Build Proactivity (M4 / PRD §7)** — the biggest missing *core* feature. Impulse
-   generator (cheap, continuous) + impulse gate (LLM, default-silence) + thought
-   threads + relationship model. Fully buildable hermetically, no hardware. This is
-   what makes Aero *notice* rather than only respond.
-2. **Prove ONE path live** — smallest real win. E.g. get an OpenRouter key, run one
-   real `aero chat` turn; or stand up Kokoro TTS and hear one line. Turns "491 tests
-   pass" into "it actually works."
+1. **Prove ONE path live** — now the biggest remaining risk. E.g. get an OpenRouter
+   key, run one real `aero chat` turn; or `aero proactive simulate` against a real
+   gemma4 to see the gate's social eval actually judge a moment; or stand up Kokoro
+   TTS and hear one line. Turns "546 tests pass" into "it actually works."
+2. **Finish M4's tail** — attention-history heat feeding retrieval rerank
+   (AERO-ATT-001, the one M4-adjacent piece skipped); wire a real `recent_failures`
+   detector into the daemon; add more tier-1 producers (humour opportunity,
+   contradiction-with-habit, memory-activation). All hermetic.
 3. **Consolidate** — merge branch→main, refresh README/status, tidy the 7 ruff nits.
 4. **Unblock a visual piece** — author a starter 3D model (M9 avatar) or install the
    Tauri toolchain (M10 GUI).
 
-**Recommendation:** #1 (fills the core gap) or #2 (retires the biggest risk). The
-codebase is broad and well-tested but has never met reality — that's the tension.
+**Recommendation:** #1 — the codebase is now broad, deep (M4 fills the last core
+gap), and well-tested, but has still never met reality. That gap is the tension.

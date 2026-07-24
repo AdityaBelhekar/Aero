@@ -606,6 +606,108 @@ def cmd_body(cfg: Config, args) -> int:
     return 0
 
 
+def cmd_proactive(cfg: Config, args) -> int:
+    """Proactivity (M4 / PRD §7): inspect the impulse gate's state, manage thought
+    threads, record feedback, or *simulate* one tick against a described moment
+    (no hardware needed — the whole loop is hermetic)."""
+    import json as _json
+
+    from aero import settings as st
+    from aero.memory.store import MemoryStore
+    from aero.proactive.loop import ProactiveLoop
+    from aero.working_set import WorldState
+
+    sub = getattr(args, "proactive_cmd", None)
+
+    # -- thread management (no brain needed) -------------------------------
+    with _open(cfg) as v:
+        store = MemoryStore(v, actor="proactive")
+        loop = ProactiveLoop(store, llm=None, cfg=cfg)
+
+        if sub == "thread-add":
+            triggers = args.trigger or []
+            t = loop.threads.open(args.statement, triggers)
+            print(f"opened thought thread {t.id[:8]} — triggers: {triggers or '(none)'}")
+            return 0
+
+        if sub == "thread-resolve":
+            loop.threads.resolve(args.id)
+            print(f"resolved thread {args.id[:8]}")
+            return 0
+
+        if sub == "threads":
+            threads = loop.threads.all()
+            if not threads:
+                print("No thought threads yet. Add one: "
+                      "aero proactive thread-add \"...\" --trigger <topic>")
+                return 0
+            print("Thought threads (active reactivate on their triggers):")
+            for t in threads:
+                trig = ", ".join(t.triggers) or "—"
+                print(f"  {t.id[:8]} [{t.status:<8}] {t.statement}")
+                print(f"           triggers: {trig}   last active: {t.last_active}")
+            return 0
+
+        if sub == "feedback":
+            res = loop.record_feedback(args.kind, app=args.app)
+            print(f"recorded '{args.kind}' — learned threshold offset now "
+                  f"{res['threshold_offset']:+.2f} (positive = quieter Aero)")
+            return 0
+
+        if sub == "simulate":
+            world = WorldState(
+                time_str="(sim)", active_app=args.app,
+                window_title=args.title, activity_level=args.activity,
+            )
+            prev = None
+            if args.prev_app:
+                prev = WorldState(active_app=args.prev_app, activity_level="active")
+            # Build a live brain for the gate eval; degrade to silence if absent.
+            llm, note = _build_brain(cfg)
+            if note:
+                print(note)
+            if not llm.health_check():
+                print("(brain offline — gate will fall to structural silence)")
+                llm = None
+            loop.llm = llm
+            decision = loop.tick(
+                world, prev=prev, recent_failures=args.failures,
+                explicit_request=args.explicit, hour=args.hour,
+            )
+            if decision is None:
+                print("No impulse fired — nothing to decide (silence, unlogged).")
+                return 0
+            print(_json.dumps(decision.to_dict(), indent=2, ensure_ascii=False))
+            print(f"\n=> {'SPEAK: ' + (decision.utterance or '') if decision.speak else 'SILENT'}")
+            return 0
+
+        # -- default: status ----------------------------------------------
+        s = st.load(cfg)
+        enabled = st.proactive_enabled(s)
+        print(f"Proactivity: {'ON' if enabled else 'off'}   "
+              f"kill switch: {'ON' if s.killswitch else 'off'}")
+        print(f"  learned threshold offset: "
+              f"{st.proactive_threshold_offset(s):+.2f} (positive = quieter)")
+        by_app = (s.proactive or {}).get("threshold_offset_by_app") or {}
+        if by_app:
+            print("  per-app offsets: " + ", ".join(f"{a}:{o:+.2f}"
+                                                     for a, o in by_app.items()))
+        print(f"  relationship: {loop.relationship.summary()}")
+        active = loop.threads.active()
+        print(f"  thought threads: {len(active)} active "
+              f"(of {len(loop.threads.all())} total)")
+        counts = loop.selfmem.counts()
+        if counts:
+            print("  self-memory: " + ", ".join(f"{k}={n}" for k, n in counts.items()))
+        recent = loop.selfmem.recent(limit=5)
+        if recent:
+            print("  recent decisions:")
+            for e in recent:
+                out = f" -> {e.outcome}" if e.outcome else ""
+                print(f"    {e.ts}  {e.action}: {e.context or ''}{out}")
+        return 0
+
+
 def cmd_mics(cfg: Config, _args) -> int:
     """List microphone input devices (for `aero voice --mic`)."""
     from aero.voice.mic import list_mics
@@ -864,6 +966,30 @@ def build_parser() -> argparse.ArgumentParser:
     bdsub.add_parser("status", help="host + robot + hardware status")
     bdsub.add_parser("install-service", help="print a systemd autostart unit")
     bdsub.add_parser("pi-preset", help="apply the Pi brain routing preset")
+
+    pr = sub.add_parser("proactive", help="Proactivity (M4): impulse gate status, "
+                                          "thought threads, feedback, simulate")
+    prsub = pr.add_subparsers(dest="proactive_cmd")
+    prsub.add_parser("status", help="gate state + relationship + threads + recent decisions")
+    prsub.add_parser("threads", help="list thought threads")
+    pta = prsub.add_parser("thread-add", help="open an unresolved thought thread")
+    pta.add_argument("statement", help="the unresolved idea")
+    pta.add_argument("--trigger", action="append",
+                     help="reactivation trigger (repeatable): a topic/file/app/person")
+    ptr = prsub.add_parser("thread-resolve", help="close a thought thread")
+    ptr.add_argument("id", help="thread id (or its 8-char prefix shown by 'threads')")
+    pfb = prsub.add_parser("feedback", help="teach the gate (routes to threshold/relationship)")
+    pfb.add_argument("kind", choices=["dont_interrupt", "talk_more", "good_call",
+                                      "ignored", "interrupted"])
+    pfb.add_argument("--app", help="scope the feedback to the active app")
+    psi = prsub.add_parser("simulate", help="run one gate tick against a described moment")
+    psi.add_argument("--app", help="active app, e.g. code.exe")
+    psi.add_argument("--prev-app", dest="prev_app", help="previous active app (to test a switch)")
+    psi.add_argument("--title", help="window title")
+    psi.add_argument("--activity", default="idle", choices=["active", "idle", "away"])
+    psi.add_argument("--explicit", action="store_true", help="user asked Aero to talk")
+    psi.add_argument("--failures", type=int, default=0, help="recent repeated-failure count")
+    psi.add_argument("--hour", type=int, default=None, help="wall-clock hour 0-23 (for quiet hours)")
     return p
 
 
@@ -887,6 +1013,7 @@ _HANDLERS = {
     "eyes": cmd_eyes,
     "play": cmd_play,
     "body": cmd_body,
+    "proactive": cmd_proactive,
 }
 
 

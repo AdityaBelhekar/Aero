@@ -71,6 +71,13 @@ class VoiceSettings:
     # When Aero runs as a physical robot. Keys: enabled(bool), platform(auto|pi),
     # hardware({leds,servos,display_face}). Empty -> desktop (no body).
     robot: dict = field(default_factory=dict)
+    # -- Proactivity (M4 / PRD §7) ----------------------------------------
+    # The impulse gate's learned state + master switch. Keys:
+    #   enabled(bool, default True), threshold_offset(float, feedback-learned
+    #   global bump), threshold_offset_by_app({app: float}, per-context bumps).
+    # Interruption feedback routes here (AERO-FBK-003); relationship feedback
+    # goes to the vault's relationship_state instead. Empty -> defaults.
+    proactive: dict = field(default_factory=dict)
 
 
 # Personality dials with safe, conservative defaults. Numeric dials are 0..1;
@@ -139,6 +146,23 @@ def is_quiet_hours(s: VoiceSettings, hour: int) -> bool:
     if start < end:
         return start <= hour < end
     return hour >= start or hour < end  # wraps past midnight
+
+
+# -- proactivity helpers (M4) ----------------------------------------------
+def proactive_enabled(s: VoiceSettings) -> bool:
+    """Whether the proactive loop runs at all. Default on — structural silence
+    keeps it quiet regardless, so 'on' just means Aero is allowed to notice."""
+    return bool((s.proactive or {}).get("enabled", True))
+
+
+def proactive_threshold_offset(s: VoiceSettings, app: str | None = None) -> float:
+    """Feedback-learned gate-threshold bump (AERO-PRO-005): the global offset plus
+    any per-app offset for the currently-active app. Positive = quieter Aero."""
+    p = s.proactive or {}
+    off = float(p.get("threshold_offset", 0.0) or 0.0)
+    if app:
+        off += float((p.get("threshold_offset_by_app") or {}).get(app, 0.0) or 0.0)
+    return off
 
 
 def permission_granted(s: VoiceSettings, scope: str) -> bool:

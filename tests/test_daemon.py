@@ -106,6 +106,42 @@ def test_does_not_consolidate_when_active(tmp_path):
     d.shutdown()
 
 
+class ProactiveSpeakLLM(WarmSpyLLM):
+    """Wants to speak whenever the impulse gate asks — everything else defers."""
+
+    def complete_json(self, messages, *, temperature=0.2, max_tokens=None):
+        from aero.cognition.service import CompletionResult, GenerationStats
+        if "impulse gate" in messages[0].content.lower():
+            payload = {"speak": True, "utterance": "wait, backwards?", "reason": "thread"}
+            return payload, CompletionResult("{}", GenerationStats(1, 1, 0.01))
+        return super().complete_json(messages, temperature=temperature, max_tokens=max_tokens)
+
+
+def test_tick_surfaces_proactive_utterance(tmp_path):
+    from aero import settings as st
+    from aero.config import Config
+
+    # Chatty + quiet-hours disabled so a strong impulse can clear the gate.
+    cfg = Config(home=tmp_path)
+    cfg.ensure_dirs()
+    s = st.load(cfg)
+    s.persona = {"chattiness": 0.9, "quiet_hours": [0, 0]}
+    st.save(s, cfg)
+
+    # A window that matches a waiting thought thread's trigger, user present-idle.
+    sample = Tier0Sample(process_name="editor", window_title="impulse.py",
+                         idle_seconds=90, ok=True)
+    prov = FakeProvider([sample, sample])
+    d = _daemon(tmp_path, prov, llm=ProactiveSpeakLLM({}), idle=1e9)
+    d.proactive.threads.open("we approached this backwards", ["impulse"])
+    d.tick()
+    row = d.vault.conn.execute(
+        "SELECT payload FROM raw_events WHERE channel='proactive'"
+    ).fetchone()
+    assert row is not None and "wait, backwards?" in row["payload"]
+    d.shutdown()
+
+
 def test_tick_logs_app_switch_and_warms(tmp_path):
     llm = WarmSpyLLM({})
     emb = WarmSpyEmb()

@@ -39,6 +39,7 @@ class DaemonConfig:
     consolidate_batch: int = 3           # small batches keep it interruptible
     keep_alive: str = "30m"
     control_ipc: bool = True             # serve the control plane for UIs to attach
+    proactive: bool = True               # run the impulse loop each tick (M4)
 
 
 class AeroDaemon:
@@ -57,6 +58,15 @@ class AeroDaemon:
         self.vault = open_vault(cfg.vault_path)
         self.store = MemoryStore(self.vault, actor="consolidation")
         self.consolidator = Consolidator(self.store, self.llm, self.emb)
+
+        # Proactive cognition (M4). Its own store actor keeps self-memory /
+        # relationship / thread writes attributable in the audit log. Built even
+        # when disabled so the object exists; tick() checks the flag.
+        from aero.proactive.loop import ProactiveLoop
+        self.proactive = ProactiveLoop(
+            MemoryStore(self.vault, actor="proactive"), self.llm, cfg
+        )
+        self.proactive.relationship.seed_defaults()
 
         self._running = False
         self._last_warm = 0.0
@@ -156,7 +166,38 @@ class AeroDaemon:
         if now - self._last_warm >= self.dcfg.keep_warm_seconds:
             self._warm_models()
 
+        self._maybe_proact(sample)
         self._maybe_consolidate(sample)
+
+    def _maybe_proact(self, sample) -> None:
+        """Give Aero the chance to notice this tick (M4). Defaults to silence;
+        only a gate 'speak' surfaces a quiet proactive message. Wrapped so a bad
+        proactive tick can never take the companion down."""
+        if not self.dcfg.proactive:
+            return
+        try:
+            from datetime import datetime
+
+            from aero.working_set import WorldState
+            world = WorldState.from_tier0(sample,
+                                          time_str=datetime.now().strftime("%a %H:%M"))
+            decision = self.proactive.tick(world)
+            if decision is not None and decision.speak and decision.utterance:
+                self._log_proactive(decision.utterance)
+                self.log.info("proactive: %s", decision.utterance)
+        except Exception:
+            self.log.exception("proactive tick error")
+
+    def _log_proactive(self, text: str) -> None:
+        """Surface a proactive utterance as a quiet text message (M4 surface:
+        text first, voice later). Recorded as a raw event so consolidation and
+        the UI can see what Aero initiated."""
+        import uuid
+        self.vault.conn.execute(
+            "INSERT INTO raw_events(id, ts, channel, payload) VALUES(?,?,?,?)",
+            (uuid.uuid4().hex, now_iso(), "proactive", f"Aero (proactive): {text}"),
+        )
+        self.vault.conn.commit()
 
     def _warm_models(self) -> None:
         self.llm.ensure_loaded(self.dcfg.keep_alive)
